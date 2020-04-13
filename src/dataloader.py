@@ -1,17 +1,15 @@
 import torch
 import numpy as np
-import glob, os
+import os
 import matplotlib.pyplot as plt
 import re
-import itertools
 import random
-from torch.utils.data import Dataset
 
 from utils.preprocess import *
 from utils.drawgaussian import *
 
 
-class ObjectKeypointDataset(Dataset):
+class ObjectKeypointDataset(torch.utils.data.Dataset):
     def __init__(self, txt_path, num_feats, inp_res, out_res, is_train=True, visualize=False):
         self.txt_path = txt_path
         self.num_features = num_feats
@@ -53,18 +51,19 @@ class ObjectKeypointDataset(Dataset):
         return meanstd['mean'], meanstd['std']
 
     def _visualize_data(self, images, heatmaps):
+        if (images.dim()==3) and (heatmaps.dim()==3):
+            images = images.unsqueeze(0)
+            heatmaps = heatmaps.unsqueeze(0)
         for img, maps in zip(images, heatmaps):
             img.add_(self.mean.unsqueeze(1).unsqueeze(1))
             img= (255.0*img).permute(1,2,0).byte().numpy()[:,:,[2,1,0]]
             img = np.ascontiguousarray(img)
-
             for hm in maps:
                 pt = np.asarray(np.unravel_index(hm.view(-1).max(0)[1].data, hm.size()))
                 pt = transform_hm_to_org(torch.from_numpy(pt).flip(0), torch.tensor([self.inp_res/2]), self.inp_res/200.0).numpy()
                 cv2.circle(img, tuple(map(int, pt)), 5, (0,255,0), -1)
             cv2.imshow("win", img)
-            cv2.waitKey(100)
-        #cv2.destroyAllWindows()
+            cv2.waitKey(0)
         return
 
     def __len__(self):
@@ -109,6 +108,9 @@ class ObjectKeypointDataset(Dataset):
             keypts[idx] = to_torch(transform(pt, center, scale, [self.out_res, self.out_res], rot=rot_val))
             tar[idx], _ = draw_labelmap(tar[idx].numpy(), keypts[idx], 1.0)
 
+        if self.visualize:
+            self._visualize_data(inp, tar)
+
         #meta data
         meta_info = {
             'rgb' : rgb_image,
@@ -117,75 +119,3 @@ class ObjectKeypointDataset(Dataset):
             'scales' : scale
         }
         return inp, tar, meta_info
-
-    
-    def manual_load(self, batch_size):
-        """
-        This function is deprecated.
-        Superseded by torch.utils.data.Dataloader
-        """
-
-        grouped_batches = list(zip(*[iter(self.image_list)] * batch_size))
-        random.shuffle(grouped_batches)
-
-        load_data = []
-        for indx, batch in enumerate(grouped_batches):
-            rgb_batch = torch.zeros(batch_size, 3, 480, 640).float()
-            cen_batch = torch.zeros(batch_size, 2).float()
-            sca_batch = torch.zeros(batch_size, 1).float()
-            tar_batch = torch.zeros(batch_size, self.num_features, self.out_res, self.out_res).float()
-            pts_batch = torch.zeros(batch_size, self.num_features, 2).float()
-
-            for i in range(len(batch)):
-
-                title,ext = os.path.splitext(os.path.basename(batch[i]))
-                suffix = re.split("_",title)[1]
-
-                filename = os.path.join(batch[i])
-                rgb_batch[i] = im_to_torch(plt.imread(filename))
-
-                filename = os.path.join(self.data_dir, "label", "label_" + suffix + ".txt")
-                imgpts = np.loadtxt(filename)
-                pts_batch[i] = torch.from_numpy(imgpts).float()
-
-                filename = os.path.join(self.data_dir, "center", "center_" + suffix + ".txt")
-                cen_batch[i] = torch.from_numpy(np.loadtxt(filename))
-
-                filename = os.path.join(self.data_dir, "scale", "scales_" + suffix + ".txt")
-                sca_batch[i] = torch.from_numpy(np.loadtxt(filename))
-
-                random_f = 1+0.25*(np.random.rand()-0.5)
-                sca_batch[i] = sca_batch[i]*(random_f)
-                cen_batch[i] = cen_batch[i]*(random_f)
-
-            inp_batch = torch.zeros(batch_size, 3, self.inp_res, self.inp_res)
-            for idx, (img, center, scale) in enumerate(zip(rgb_batch, cen_batch, sca_batch)):
-                r = 0
-                if self.is_train:
-                    r = torch.randn(1).mul_(15).clamp(-2*15, 2*15)[0] if random.random() <= 0.6 else 0
-            
-                    img[0, :, :].mul_(random.uniform(0.8, 1.2)).clamp_(0, 1)
-                    img[1, :, :].mul_(random.uniform(0.8, 1.2)).clamp_(0, 1)
-                    img[2, :, :].mul_(random.uniform(0.8, 1.2)).clamp_(0, 1)
-
-                inp = crop(img, center, scale, [self.inp_res, self.inp_res], rot=r)
-                inp_batch[idx] = color_normalize(inp, self.mean, self.std)
-                for i in range(self.num_features):
-                    pt = transform(pts_batch[idx, i], center, scale, [self.inp_res, self.inp_res], rot=r)
-                    pt = torch.from_numpy(pt).float()
-                    pts_batch[idx, i] = pt
-                    pt = transform_org_to_hm(pt, center, scale)
-                    tar_batch[idx, i] = torch.from_numpy(DrawGaussian(tar_batch[idx, i].numpy(), pt, 1.0))
-
-            if self.visualize:
-                self._visualize_data(inp_batch, pts_batch)
-
-            meta_data = {
-                'rgb' : rgb_batch,
-                'points' : pts_batch,
-                'centers' : cen_batch,
-                'scales' : sca_batch
-            }
-            load_data.append([inp_batch, tar_batch, meta_data])
-
-        return load_data
