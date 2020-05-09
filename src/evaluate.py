@@ -1,3 +1,4 @@
+from __future__ import print_function
 import warnings
 warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
@@ -45,8 +46,8 @@ def getTransformationsUsingPnP(x, cen, sca):                                    
                 pts_3d.append(obj_points[j])
         a = np.ascontiguousarray(np.asarray(pts_2d)).reshape((len(pts_2d),1,2))
         b = np.ascontiguousarray(np.asarray(pts_3d)).reshape((len(pts_3d),1,3))
-        #_, rvec, tvec, inl = cv2.solvePnPRansac(b, a, camera_rgb_intrinsics, None, None, None, False, 1000, 1, 0.95, None, cv2.SOLVEPNP_EPNP)
-        _, rvec, tvec = cv2.solvePnP(b, a, camera_rgb_intrinsics, None, None, None, False, cv2.SOLVEPNP_EPNP)
+        _, rvec, tvec, inl = cv2.solvePnPRansac(b, a, camera_rgb_intrinsics, None, None, None, False, 1000, 1, 0.95, None, cv2.SOLVEPNP_EPNP)
+        #_, rvec, tvec = cv2.solvePnP(b, a, camera_rgb_intrinsics, None, None, None, False, cv2.SOLVEPNP_EPNP)
         tf = np.eye(4)
         tf[:3,:3] = cv2.Rodrigues(rvec)[0]
         tf[:3, 3] = tvec[:,0]
@@ -126,7 +127,7 @@ if __name__ == '__main__':
     ap.add_argument('--obj_off', required=True)
     ap.add_argument('--obj_inf', required=True)
     ap.add_argument('--visualize', required=False, default=False)
-    ap.add_argument('--batch', required=False, default=8)
+    ap.add_argument('--batch', required=False, default=8, type=int)
     opt = ap.parse_args()
 
     model_file = opt.weights
@@ -136,12 +137,12 @@ if __name__ == '__main__':
     model_info_path = opt.obj_inf
     camera_mat_path = os.path.join(os.path.dirname(dataset_path), "camera_matrix.npy")
     eval_batch_size = opt.batch
-    print "Evaluating: ", opt.weights
-    print "Dataset path: ", opt.dataset
-    print "Mesh path: ", opt.obj_off
+    print("Evaluating: ", opt.weights)
+    print("Dataset path: ", opt.dataset)
+    print("Mesh path: ", opt.obj_off)
 
     manualSeed = 0
-    print "Random Seed: ", manualSeed
+    print("Random Seed: ", manualSeed)
     random.seed(manualSeed)
     np.random.seed(manualSeed)
     torch.manual_seed(manualSeed)
@@ -151,20 +152,20 @@ if __name__ == '__main__':
     cudnn.benchmark = False
 
     dataset_dir = os.path.dirname(dataset_path)
-    f = open(dataset_path)
-    lines = [line.rstrip("\n") for line in f.readlines()]
+    with open(dataset_path) as f:
+        lines = [line.rstrip("\n") for line in f.readlines()]
     random.shuffle(lines)
     grouped_batches = list(zip(*[iter(lines)] * eval_batch_size))
     random.shuffle(grouped_batches)
-    print len(grouped_batches), "batches of size ", eval_batch_size
+    print(len(grouped_batches), "batches of size ", eval_batch_size)
 
     camera_rgb_intrinsics = np.load(camera_mat_path)
     picked_points = get_object_definition(model_info_path)
     obj_points = (picked_points[:,:3]).astype(np.float64, order='C')
 
     if visualize:
-        f = open(mesh_filename)
-        verts, faces = read_off(f)
+        with open(mesh_filename) as f:
+            verts, faces = read_off(f)
 
     inp_res = 256
     net_out_size = 64
@@ -210,6 +211,7 @@ if __name__ == '__main__':
                 point = torch.Tensor((imgpts[j,0], imgpts[j,1]))
                 point = transform_org_to_hm(point, input_cen_batch[i], input_sca_batch[i])
                 input_tar_batch[i][j] = torch.from_numpy(DrawGaussian(input_tar_batch[i][j].numpy(), point, 1.0)).float()
+                #input_tar_batch[i][j] = torch.from_numpy(draw_labelmap(input_tar_batch[i][j].numpy(), point, 1.0)).float()
 
         #input_sca_batch = input_sca_batch*(1+0.5*np.random.rand())
         #input_cen_batch = input_cen_batch*(1+0.5*np.random.rand())
@@ -238,9 +240,11 @@ if __name__ == '__main__':
                 dist = torch.from_numpy(out_points - tru_points).float().norm(2).data
                 error.append(dist)
 
-        print "Batch: ", indx, "\tError: ", sum(error)/len(error)
-        average_kpt_error += float(sum(error)/len(error))
         plot_errors(out_poses, tru_poses)
+        print("Batch: ", indx)
+        print("\tKeypoint error: ", sum(error)/len(error))
+        print("\tPosition error: ", average_pos_error[-1])
+        average_kpt_error += float(sum(error)/len(error))
 
         if visualize:
             viz_keypoints(out[1], input_rgb_batch, input_cen_batch, input_sca_batch, input_pts_batch)
@@ -248,18 +252,18 @@ if __name__ == '__main__':
             img_fn_counter += 1
 
 
-    print "Average error: ", average_kpt_error/len(grouped_batches)
-    print "Average pos error: ", sum(average_pos_error)/len(average_pos_error)
-    print "Average rot error: ", sum(average_rot_error)/len(average_rot_error)
-    print "num of outliers: ", counter
-    print "=================="
+    print("Average error: ", average_kpt_error/len(grouped_batches))
+    print("Average pos error: ", sum(average_pos_error)/len(average_pos_error))
+    print("Average rot error: ", sum(average_rot_error)/len(average_rot_error))
+    print("num of outliers: ", counter)
+    print("==================")
 
     t_errors = [float(np.linalg.norm(e)) for e in average_pos_error]
-    print average_geo_error[0], len(average_geo_error)
-    print "Mean pos error: ", statistics.mean(t_errors)
-    print "Median pos error: ", statistics.median(t_errors)
-    print "Mean geo error: ", statistics.mean(average_geo_error)
-    print "Median geo error: ", statistics.median(average_geo_error)
+    print(average_geo_error[0], len(average_geo_error))
+    print("Mean pos error: ", statistics.mean(t_errors))
+    print("Median pos error: ", statistics.median(t_errors))
+    print("Mean geo error: ", statistics.mean(average_geo_error))
+    print("Median geo error: ", statistics.median(average_geo_error))
 
     fig, axs = plt.subplots(3, 3)
     fig.suptitle("Avg errors in position(m), avg errors in rotation(deg), and absolute true+estimated rotation(deg)")
