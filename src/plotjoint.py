@@ -5,8 +5,9 @@ import re
 
 
 
-def parselogfile(f):
-    lines = [line.rstrip("\n") for line in f.readlines()]
+def parselogfile(logfile):
+    with open(logfile) as f:
+        lines = [line.rstrip("\n") for line in f.readlines()]
     iters = []
     train_loss = []
     valid_loss = []
@@ -35,8 +36,7 @@ def main(argv):
         )
     args = parser.parse_args()
 
-    f = open(args.log_file_1)
-    iters, train, valid = parselogfile(f)
+    iters, train, valid = parselogfile(args.log_file_1)
 
     plt.plot(iters, train, 'r', label='train')
     plt.plot(iters, valid, 'g', label='valid')

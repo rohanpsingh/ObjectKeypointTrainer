@@ -7,8 +7,9 @@ import re
 import matplotlib.pylab as pylab
 
 
-def parselogfile(f):
-    lines = [line.rstrip("\n") for line in f.readlines()]
+def parselogfile(logfile):
+    with open(logfile) as f:
+        lines = [line.rstrip("\n") for line in f.readlines()]
     iters = []
     train_loss = []
     valid_loss = []
@@ -30,22 +31,13 @@ def parselogfile(f):
 
 def main(argv):
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "log_file_1",
-        help = "path to log file"
-        )
-    parser.add_argument(
-        "log_file_2",
-        help = "path to log file"
-        )
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--log1", required=True, help = "path to log file")
+    ap.add_argument("--log2", required=True, help = "path to log file")
+    args = ap.parse_args()
 
-    f = open(args.log_file_1)
-    iters1, train1, valid1 = parselogfile(f)
-    f = open(args.log_file_2)
-    iters2, train2, valid2 = parselogfile(f)
-
+    iters1, train1, valid1 = parselogfile(args.log1)
+    iters2, train2, valid2 = parselogfile(args.log2)
 
     params = {'legend.fontsize': 'xx-large',
               'figure.figsize': (15, 5),
@@ -55,8 +47,8 @@ def main(argv):
               'ytick.labelsize':'xx-large'}
     pylab.rcParams.update(params)
 
-    plt.plot(iters1[3:60], valid1[3:60], 'r', label="Loss = L_hm", linewidth=5.0)
-    plt.plot(iters2[3:60], valid2[3:60], 'g', label="Loss = L_hm + L_mv", linewidth=5.0)
+    plt.plot(iters1[3:60], valid1[3:60], 'r', label="Loss = log1_valid_loss", linewidth=5.0)
+    plt.plot(iters2[3:60], valid2[3:60], 'g', label="Loss = log2_valid_loss", linewidth=5.0)
 
     plt.xlabel('Epochs', fontsize=20)
     plt.ylabel('Validation loss', fontsize=20)
