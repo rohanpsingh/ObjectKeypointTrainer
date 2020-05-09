@@ -23,7 +23,8 @@ from utils.preprocess import *
 from utils.drawgaussian import *
 from models.StackedHourGlass import *
 
-counter = 0
+np.set_printoptions(suppress=True)
+outlier_count = 0
 
 def read_off(file):
     if 'OFF' != file.readline().strip():
@@ -33,7 +34,12 @@ def read_off(file):
     faces = [[int(s) for s in file.readline().strip().split(' ')][1:] for i_face in range(n_faces)]
     return np.array(verts), np.array(faces)
 
-def getTransformationsUsingPnP(x, cen, sca):                                    #returns pose of camera in object frame
+def getTransformationsUsingPnP(x, cen, sca, model_pts):
+    '''
+    Estimates pose of camera in object frame.
+    Input: Heatmaps, bbox centers, bbox scales, 3D model points
+    Output: 4x4 homogenous matrix
+    '''
     T = torch.zeros(x.size(0), 4, 4)
     for i in range(x.size(0)):
         pts_2d = []
@@ -43,11 +49,11 @@ def getTransformationsUsingPnP(x, cen, sca):                                    
             pt = transform_hm_to_org(torch.from_numpy(pk).flip(0).float(), cen[i], sca[i])
             if x[i,j].max() != 0.0:                                              #do not consider points outside the frame
                 pts_2d.append(pt.numpy())
-                pts_3d.append(obj_points[j])
+                pts_3d.append(model_pts[j])
         a = np.ascontiguousarray(np.asarray(pts_2d)).reshape((len(pts_2d),1,2))
         b = np.ascontiguousarray(np.asarray(pts_3d)).reshape((len(pts_3d),1,3))
-        _, rvec, tvec, inl = cv2.solvePnPRansac(b, a, camera_rgb_intrinsics, None, None, None, False, 1000, 1, 0.95, None, cv2.SOLVEPNP_EPNP)
-        #_, rvec, tvec = cv2.solvePnP(b, a, camera_rgb_intrinsics, None, None, None, False, cv2.SOLVEPNP_EPNP)
+        #_, rvec, tvec, inl = cv2.solvePnPRansac(b, a, camera_rgb_intrinsics, None, None, None, False, 1000, 1, 0.95, None, cv2.SOLVEPNP_EPNP)
+        _, rvec, tvec = cv2.solvePnP(b, a, camera_rgb_intrinsics, None, None, None, False, cv2.SOLVEPNP_EPNP)
         tf = np.eye(4)
         tf[:3,:3] = cv2.Rodrigues(rvec)[0]
         tf[:3, 3] = tvec[:,0]
@@ -68,7 +74,7 @@ def viz_keypoints(x, rgb_batch, cen_batch, sca_batch, pts_batch):
 
         imgfn = os.path.dirname(model_file) + "/valids/kp_image_" + repr(i) + "_" + repr(img_fn_counter) + ".jpg"
         cv2.imshow("window", img)
-        cv2.waitKey(200)
+        cv2.waitKey(0)
         cv2.imwrite(imgfn,img)
     cv2.destroyAllWindows()
     return
@@ -91,14 +97,14 @@ def viz_model(rgb_batch, cen_batch, sca_batch, pos_batch):
 
         imgfn = os.path.dirname(model_file) + "/valids/mesh_image_" + repr(i) + "_" + repr(img_fn_counter) + ".jpg"
         cv2.imshow("window", img)
-        cv2.waitKey(10)
+        cv2.waitKey(0)
         cv2.imwrite(imgfn, img)
     cv2.destroyAllWindows()
     return
 
-def plot_errors(est_pos_batch, tru_pos_batch):
+def calc_3d_errors(est_pos_batch, tru_pos_batch):
     batch_size = est_pos_batch.size(0)
-    global counter
+    global outlier_count
     for i in range(batch_size):
         est_tf = est_pos_batch[i].numpy()
         tru_tf = tru_pos_batch[i].numpy()
@@ -106,9 +112,9 @@ def plot_errors(est_pos_batch, tru_pos_batch):
         rot_error = np.subtract(tf3.euler.mat2euler(est_tf[:3,:3]), tf3.euler.mat2euler(tru_tf[:3,:3]))
         geo_error = np.linalg.norm(logm(np.dot(np.linalg.inv(tru_tf[:3,:3]), est_tf[:3,:3]), disp=False)[0])/np.sqrt(2)
         if (np.linalg.norm(pos_error)>0.1) or  (np.sum(rot_error*180/math.pi) > 30):
-            counter += 1
-        average_pos_error.append(pos_error)
-        average_rot_error.append(rot_error*180/math.pi)
+            outlier_count += 1
+        average_pos_error.append(pos_error.round(4))
+        average_rot_error.append((rot_error*180/math.pi).round(2))
         average_geo_error.append(geo_error*180/math.pi)
         average_est_rot.append(np.asarray(tf3.euler.mat2euler(est_tf[:3,:3]))*180/math.pi)
         average_tru_rot.append(np.asarray(tf3.euler.mat2euler(tru_tf[:3,:3]))*180/math.pi)
@@ -118,22 +124,23 @@ def get_object_definition(pp_file):
     with open(pp_file, 'r') as file:
         lines = [[float(i.rsplit('=')[1].rsplit('"')[1]) for i in line.split()[1:4]] for line in file.readlines()[8:-1]]
     return np.asarray(lines)
-        
-if __name__ == '__main__':
 
+if __name__=='__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--weights', required=True)
     ap.add_argument('--dataset', required=True)
     ap.add_argument('--obj_off', required=True)
     ap.add_argument('--obj_inf', required=True)
-    ap.add_argument('--visualize', required=False, default=False)
     ap.add_argument('--batch', required=False, default=8, type=int)
+    ap.add_argument('--visualize', action='store_true')
+    ap.add_argument('-v', '--verbose', action='store_true')
     opt = ap.parse_args()
 
     model_file = opt.weights
     dataset_path = opt.dataset
     mesh_filename = opt.obj_off
-    visualize = (opt.visualize.lower()=='true')
+    visualize = opt.visualize
+    verbose = opt.verbose
     model_info_path = opt.obj_inf
     camera_mat_path = os.path.join(os.path.dirname(dataset_path), "camera_matrix.npy")
     eval_batch_size = opt.batch
@@ -228,23 +235,25 @@ if __name__ == '__main__':
 
         inp = torch.autograd.Variable(inp.cuda())
         out = net(inp)
-        out_poses = getTransformationsUsingPnP(out[1].cpu(), input_cen_batch, input_sca_batch)
-        tru_poses = getTransformationsUsingPnP(input_tar_batch, input_cen_batch, input_sca_batch)
+        out_poses = getTransformationsUsingPnP(out[1].cpu(), input_cen_batch, input_sca_batch, obj_points)
+        tru_poses = getTransformationsUsingPnP(input_tar_batch, input_cen_batch, input_sca_batch, obj_points)
 
-        error = []
+        kpt_pix_error = []
         for i in range(eval_batch_size):
             for j in range(num_feats):
                 out_points = np.asarray(np.unravel_index(out[1][i][j].cpu().view(-1).max(0)[1].data, out[1][i][j].size()))
                 out_points = transform_hm_to_org(torch.from_numpy(np.asarray(out_points)).flip(0).float(), input_cen_batch[i], input_sca_batch[i]).numpy()
                 tru_points = input_pts_batch[i][j].numpy()
                 dist = torch.from_numpy(out_points - tru_points).float().norm(2).data
-                error.append(dist)
+                kpt_pix_error.append(round(dist.item(),2))
 
-        plot_errors(out_poses, tru_poses)
-        print("Batch: ", indx)
-        print("\tKeypoint error: ", sum(error)/len(error))
-        print("\tPosition error: ", average_pos_error[-1])
-        average_kpt_error += float(sum(error)/len(error))
+        calc_3d_errors(out_poses, tru_poses)
+        if verbose:
+            print("Batch: ", indx)
+            print("\tKeypoint error(pixels): {} \t(avg: {})".format(kpt_pix_error, sum(kpt_pix_error)/len(kpt_pix_error)))
+            print("\tPosition error(meters): {}".format(average_pos_error[-1]))
+            print("\tRotation error(degree): {}".format(average_rot_error[-1]))
+        average_kpt_error += float(sum(kpt_pix_error)/len(kpt_pix_error))
 
         if visualize:
             viz_keypoints(out[1], input_rgb_batch, input_cen_batch, input_sca_batch, input_pts_batch)
@@ -252,14 +261,13 @@ if __name__ == '__main__':
             img_fn_counter += 1
 
 
-    print("Average error: ", average_kpt_error/len(grouped_batches))
+    print("Average pix error: ", average_kpt_error/len(grouped_batches))
     print("Average pos error: ", sum(average_pos_error)/len(average_pos_error))
     print("Average rot error: ", sum(average_rot_error)/len(average_rot_error))
-    print("num of outliers: ", counter)
+    print("num of outliers: ", outlier_count)
     print("==================")
 
     t_errors = [float(np.linalg.norm(e)) for e in average_pos_error]
-    print(average_geo_error[0], len(average_geo_error))
     print("Mean pos error: ", statistics.mean(t_errors))
     print("Median pos error: ", statistics.median(t_errors))
     print("Mean geo error: ", statistics.mean(average_geo_error))
