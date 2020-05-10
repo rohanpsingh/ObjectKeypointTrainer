@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import numpy as np
 import torch
@@ -59,16 +60,21 @@ class EvaluatePreds(object):
         for i in range(batch_size):
             est_tf = est_pos_batch[i].numpy()
             tru_tf = tru_pos_batch[i].numpy()
-            pos_error = est_tf[:3,3] - tru_tf[:3,3]
-            rot_error = np.subtract(tf3.euler.mat2euler(est_tf[:3,:3]), tf3.euler.mat2euler(tru_tf[:3,:3]))
+            #position errors
+            pos_error = np.abs(est_tf[:3,3] - tru_tf[:3,3])
+            #rotation errors
+            est_euler = np.asarray(tf3.euler.mat2euler(est_tf[:3,:3]))*180/math.pi
+            tru_euler = np.asarray(tf3.euler.mat2euler(tru_tf[:3,:3]))*180/math.pi
+            rot_error = np.abs(np.asarray([(e-360) if e>180 else ((e+360) if e<-180 else e)  for e in (est_euler-tru_euler)]))
+            #rotation errors (geodesic distance)
             geo_error = np.linalg.norm(logm(np.dot(np.linalg.inv(tru_tf[:3,:3]), est_tf[:3,:3]), disp=False)[0])/np.sqrt(2)
-            if (np.linalg.norm(pos_error)>0.1) or  (np.sum(rot_error*180/math.pi) > 30):
+            if (np.linalg.norm(pos_error)>0.1) or  (np.sum(rot_error) > 30):
                 self.outlier_count += 1
             self.average_pos_error.append(pos_error.round(4))
-            self.average_rot_error.append((rot_error*180/math.pi).round(2))
+            self.average_rot_error.append((rot_error).round(2))
             self.average_geo_error.append(geo_error*180/math.pi)
-            self.average_est_rot.append(np.asarray(tf3.euler.mat2euler(est_tf[:3,:3]))*180/math.pi)
-            self.average_tru_rot.append(np.asarray(tf3.euler.mat2euler(tru_tf[:3,:3]))*180/math.pi)
+            self.average_est_rot.append(est_euler)
+            self.average_tru_rot.append(tru_euler)
 
         if self.verbose:
             print("\tPosition error(meters): {}".format(self.average_pos_error[-1]))
