@@ -5,17 +5,14 @@ warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
 import torch
 import numpy as np
-import torch.nn as nn
 import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader
-import re
 import random
 import argparse
-import matplotlib.pyplot as plt
+import os
 
-from utils.drawgaussian import *
-from utils.evaluatepreds import EvaluatePreds
-from utils.visualizepreds import VisualizePreds
+from utils.evaluate_preds import EvaluatePreds
+from utils.visualize_preds import VisualizePreds
 from dataloader import ObjectKeypointDataset
 from models.StackedHourGlass import *
 
@@ -26,8 +23,7 @@ eval_batch_size = 1
 
 def initialize_net(trained_weights, num_feats):
     net = StackedHourGlass(256, 2, 2, 4, num_feats).cuda()
-    net = nn.DataParallel(net).cuda()
-    cudnn.benchmark = True
+    net = torch.nn.DataParallel(net).cuda()
     net.eval()
     net.load_state_dict(torch.load(trained_weights))
     manualSeed = 0
