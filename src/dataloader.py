@@ -106,8 +106,8 @@ class ObjectKeypointDataset(torch.utils.data.Dataset):
         #this is the target image
         tar = torch.zeros(self.num_features, self.out_res, self.out_res)
         for idx, pt in enumerate(keypts):
-            keypts[idx] = to_torch(transform(pt, center, scale, [self.out_res, self.out_res], rot=rot_val))
-            tar[idx], _ = draw_labelmap(tar[idx].numpy(), keypts[idx], 1.0)
+            pt_tf = to_torch(transform(pt, center, scale, [self.out_res, self.out_res], rot=rot_val))
+            tar[idx], _ = draw_labelmap(tar[idx].numpy(), pt_tf, 1.0)
 
         if self.visualize:
             self._visualize_data(inp, tar)
