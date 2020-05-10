@@ -18,12 +18,12 @@ class EvaluatePreds(object):
         self.verbose = verbose
 
         self.outlier_count = 0
-        self.average_kpt_error = []
-        self.average_pos_error = []
-        self.average_rot_error = []
-        self.average_geo_error = []
-        self.average_est_rot = []
-        self.average_tru_rot = []
+        self.list_kpt_error = []
+        self.list_pos_error = []
+        self.list_rot_error = []
+        self.list_geo_error = []
+        self.list_est_rot = []
+        self.list_tru_rot = []
 
 
     def getTransformationsUsingPnP(self, heatmaps, centers, scales):
@@ -70,15 +70,15 @@ class EvaluatePreds(object):
             geo_error = np.linalg.norm(logm(np.dot(np.linalg.inv(tru_tf[:3,:3]), est_tf[:3,:3]), disp=False)[0])/np.sqrt(2)
             if (np.linalg.norm(pos_error)>0.1) or  (np.sum(rot_error) > 30):
                 self.outlier_count += 1
-            self.average_pos_error.append(pos_error.round(4))
-            self.average_rot_error.append((rot_error).round(2))
-            self.average_geo_error.append(geo_error*180/math.pi)
-            self.average_est_rot.append(est_euler)
-            self.average_tru_rot.append(tru_euler)
+            self.list_pos_error.append(pos_error.round(4))
+            self.list_rot_error.append((rot_error).round(2))
+            self.list_geo_error.append(geo_error*180/math.pi)
+            self.list_est_rot.append(est_euler)
+            self.list_tru_rot.append(tru_euler)
 
         if self.verbose:
-            print("\tPosition error(meters): {}".format(self.average_pos_error[-1]))
-            print("\tRotation error(degree): {}".format(self.average_rot_error[-1]))
+            print("\tPosition error(meters): {}".format(self.list_pos_error[-1]))
+            print("\tRotation error(degree): {}".format(self.list_rot_error[-1]))
         return
 
 
@@ -94,61 +94,61 @@ class EvaluatePreds(object):
                 dist = torch.from_numpy(out_points - tru_points).float().norm(2).data
                 batch_kpt_error.append(round(dist.item(),2))
 
-        self.average_kpt_error.append(float(sum(batch_kpt_error)/len(batch_kpt_error)))
+        self.list_kpt_error.append(float(sum(batch_kpt_error)/len(batch_kpt_error)))
         if self.verbose:
-            print("\tKeypoint error(pixels): {} \t(avg: {})".format(batch_kpt_error, self.average_kpt_error[-1]))
+            print("\tKeypoint error(pixels): {} \t(avg: {})".format(batch_kpt_error, self.list_kpt_error[-1]))
 
         return
 
     def plot(self):
-        print("Average pix error: ", sum(self.average_kpt_error)/len(self.average_kpt_error))
-        print("Average pos error: ", sum(self.average_pos_error)/len(self.average_pos_error))
-        print("Average rot error: ", sum(self.average_rot_error)/len(self.average_rot_error))
+        print("Average pix error: ", sum(self.list_kpt_error)/len(self.list_kpt_error))
+        print("Average pos error: ", sum(self.list_pos_error)/len(self.list_pos_error))
+        print("Average rot error: ", sum(self.list_rot_error)/len(self.list_rot_error))
         print("num of outliers: ", self.outlier_count)
         print("==================")
 
-        t_errors = [float(np.linalg.norm(e)) for e in self.average_pos_error]
+        t_errors = [float(np.linalg.norm(e)) for e in self.list_pos_error]
         print("Mean pos error: ", statistics.mean(t_errors))
         print("Median pos error: ", statistics.median(t_errors))
-        print("Mean geo error: ", statistics.mean(self.average_geo_error))
-        print("Median geo error: ", statistics.median(self.average_geo_error))
+        print("Mean geo error: ", statistics.mean(self.list_geo_error))
+        print("Median geo error: ", statistics.median(self.list_geo_error))
 
         fig, axs = plt.subplots(3, 3)
         fig.suptitle("Avg errors in position(m), avg errors in rotation(deg), and absolute true+estimated rotation(deg)")
 
-        axs[0,0].plot(np.asarray(self.average_pos_error)[:, 0])
+        axs[0,0].plot(np.asarray(self.list_pos_error)[:, 0])
         axs[0,0].set(ylabel='pos_error_x')
         axs[0,0].grid(True)
 
-        axs[1,0].plot(np.asarray(self.average_pos_error)[:, 1])
+        axs[1,0].plot(np.asarray(self.list_pos_error)[:, 1])
         axs[1,0].set(ylabel='pos_error_y')
         axs[1,0].grid(True)
 
-        axs[2,0].plot(np.asarray(self.average_pos_error)[:, 2])
+        axs[2,0].plot(np.asarray(self.list_pos_error)[:, 2])
         axs[2,0].set(ylabel='pos_error_z')
         axs[2,0].grid(True)
 
-        axs[0,1].plot(np.asarray(self.average_rot_error)[:, 0])
+        axs[0,1].plot(np.asarray(self.list_rot_error)[:, 0])
         axs[0,1].set(ylabel='rot_error_x')
         axs[0,1].grid(True)
 
-        axs[1,1].plot(np.asarray(self.average_rot_error)[:, 1])
+        axs[1,1].plot(np.asarray(self.list_rot_error)[:, 1])
         axs[1,1].set(ylabel='rot_error_y')
         axs[1,1].grid(True)
 
-        axs[2,1].plot(np.asarray(self.average_rot_error)[:, 2])
+        axs[2,1].plot(np.asarray(self.list_rot_error)[:, 2])
         axs[2,1].set(ylabel='rot_error_z')
         axs[2,1].grid(True)
 
-        axs[0,2].plot(zip(np.asarray(self.average_tru_rot)[:, 0], np.asarray(self.average_est_rot)[:, 0]))
+        axs[0,2].plot(zip(np.asarray(self.list_tru_rot)[:, 0], np.asarray(self.list_est_rot)[:, 0]))
         axs[0,2].set(ylabel='rot_track_x')
         axs[0,2].grid(True)
 
-        axs[1,2].plot(zip(np.asarray(self.average_tru_rot)[:, 1], np.asarray(self.average_est_rot)[:, 1]))
+        axs[1,2].plot(zip(np.asarray(self.list_tru_rot)[:, 1], np.asarray(self.list_est_rot)[:, 1]))
         axs[1,2].set(ylabel='rot_track_y')
         axs[1,2].grid(True)
 
-        axs[2,2].plot(zip(np.asarray(self.average_tru_rot)[:, 2], np.asarray(self.average_est_rot)[:, 2]))
+        axs[2,2].plot(zip(np.asarray(self.list_tru_rot)[:, 2], np.asarray(self.list_est_rot)[:, 2]))
         axs[2,2].set(ylabel='rot_track_z')
         axs[2,2].grid(True)
 
