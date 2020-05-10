@@ -7,6 +7,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
+from torch.utils.data import DataLoader
 import re
 import random
 import argparse
@@ -15,6 +16,7 @@ import matplotlib.pyplot as plt
 from utils.drawgaussian import *
 from utils.evaluatepreds import EvaluatePreds
 from utils.visualizepreds import VisualizePreds
+from dataloader import ObjectKeypointDataset
 from models.StackedHourGlass import *
 
 np.set_printoptions(suppress=True)
@@ -35,90 +37,53 @@ def initialize_net(trained_weights, num_feats):
     torch.manual_seed(manualSeed)
     torch.cuda.manual_seed(manualSeed)
     torch.cuda.manual_seed_all(manualSeed)
+    torch.set_default_tensor_type(torch.FloatTensor)
     cudnn.deterministic=True
     cudnn.benchmark = False
     print("====Loaded weights====")
     return net
 
-def get_predictions(net, opt, num_feats, model_points, visualize=False, verbose=False):
+def get_predictions(net, dataset_dir, off_file, num_feats, model_points, visualize=False, verbose=False):
 
     #load camera intrinsics (needed for 3D errors and visualization)
-    camera_mat = np.load(os.path.join(opt.dataset, 'camera_matrix.npy'))
+    camera_mat = np.load(os.path.join(dataset_dir, 'camera_matrix.npy'))
 
-    #set up evaluator
-    evaluator = EvaluatePreds(opt, model_points, camera_mat)
-
-    if visualize:
-        vis = VisualizePreds(opt.obj_off, camera_mat)
+    #set up evaluator and visualizer
+    evaluator = EvaluatePreds(model_points, camera_mat, verbose)
+    vis = VisualizePreds(off_file, camera_mat)
 
     #load pre-computed mean and std of dataset
-    meanstd_file = os.path.join(opt.dataset, 'mean.pth.tar')
+    meanstd_file = os.path.join(dataset_dir, 'mean.pth.tar')
     if os.path.isfile(meanstd_file):
         meanstd = torch.load(meanstd_file)
         mean, std = meanstd['mean'], meanstd['std']
     else:
         mean, std = torch.zeros(3), torch.zeros(3)
 
-    #path to txt file containing paths to test images
-    images_txt_path = os.path.join(opt.dataset, 'valid.txt')
+    #load dataset using dataloader
+    eval_set = ObjectKeypointDataset(os.path.join(dataset_dir, "valid.txt"), num_feats, 256, 64, is_train=False)
+    eval_data = DataLoader(eval_set, batch_size=eval_batch_size, shuffle=True, num_workers=6)
+    print("valid data size is: {} batches of batch size: {}".format(len(eval_data), eval_batch_size))
 
-    with open(images_txt_path) as f:
-        lines = [line.rstrip("\n") for line in f.readlines()]
-    random.shuffle(lines)
-    grouped_batches = list(zip(*[iter(lines)] * eval_batch_size))
-    random.shuffle(grouped_batches)
-    print(len(grouped_batches), "batches of size ", eval_batch_size)
+    with torch.no_grad():
+        for b, (inputs, targets, meta) in enumerate(eval_data):
+            #forward pass through network
+            inp = torch.autograd.Variable(inputs.cuda())
+            out = net(inp)
 
-    for indx, batch in enumerate(grouped_batches):
-        input_rgb_batch  = torch.zeros(eval_batch_size, 3, 480, 640).float()
-        input_cen_batch  = torch.zeros(eval_batch_size, 2).float()
-        input_sca_batch  = torch.zeros(eval_batch_size, 1).float()
-        input_pts_batch  = torch.zeros(eval_batch_size, num_feats, 2).float()
-        input_tar_batch  = torch.zeros(eval_batch_size, num_feats, net_out_size, net_out_size).float()
+            #get evaluations
+            if verbose:
+                print("Batch: ", b)
+            out_poses = evaluator.getTransformationsUsingPnP(out[1].cpu(), meta['centers'], meta['scales'])
+            tru_poses = evaluator.getTransformationsUsingPnP(targets, meta['centers'], meta['scales'])
+            evaluator.calc_2d_errors(out[1].cpu(), meta['points'], meta['centers'], meta['scales'])
+            evaluator.calc_3d_errors(out_poses, tru_poses)
 
-        for i in range(eval_batch_size):
-            title,ext = os.path.splitext(os.path.basename(batch[i]))
-            suffix = re.split("_",title)[1]
-
-            filename = os.path.join(batch[i])
-            input_rgb_batch[i] = im_to_torch(plt.imread(filename))
-
-            filename = os.path.join(os.path.dirname(filename), "..", "label", "label_" + suffix + ".txt")
-            imgpts = np.loadtxt(filename)
-            input_pts_batch[i] = torch.from_numpy(imgpts).float()[:num_feats]
-
-            filename = os.path.join(os.path.dirname(filename), "..", "center", "center_" + suffix + ".txt")
-            input_cen_batch[i] = torch.from_numpy(np.loadtxt(filename))
-
-            filename = os.path.join(os.path.dirname(filename), "..", "scale", "scales_" + suffix + ".txt")
-            input_sca_batch[i] = torch.from_numpy(np.loadtxt(filename))
-
-            for j in range(num_feats):
-                point = torch.Tensor((imgpts[j,0], imgpts[j,1]))
-                point = transform_org_to_hm(point, input_cen_batch[i], input_sca_batch[i])
-                input_tar_batch[i][j] = torch.from_numpy(DrawGaussian(input_tar_batch[i][j].numpy(), point, 1.0)).float()
-
-        #input_sca_batch = input_sca_batch*(1+0.5*np.random.rand())
-        #input_cen_batch = input_cen_batch*(1+0.5*np.random.rand())
-
-        inp = torch.zeros(eval_batch_size, 3, net_inp_res, net_inp_res)
-        for idx, (img, center, scale) in enumerate(zip(input_rgb_batch, input_cen_batch, input_sca_batch)):
-            img = crop(img, center, scale, [net_inp_res, net_inp_res], rot=0)
-            inp[idx] = color_normalize(img, mean, std)
-
-        inp = torch.autograd.Variable(inp.cuda())
-        out = net(inp)
-        out_poses = evaluator.getTransformationsUsingPnP(out[1].cpu(), input_cen_batch, input_sca_batch)
-        tru_poses = evaluator.getTransformationsUsingPnP(input_tar_batch, input_cen_batch, input_sca_batch)
-
-        print("Batch: ", indx)
-        evaluator.calc_2d_errors(out[1].cpu(), input_pts_batch, input_cen_batch, input_sca_batch)
-        evaluator.calc_3d_errors(out_poses, tru_poses)
-
-        if visualize:
-            vis.draw_keypoints(out[1], input_rgb_batch, input_cen_batch, input_sca_batch, input_pts_batch)
-            vis.draw_model(input_rgb_batch, out_poses)
-            vis.cv_display(100)
+            #visualize iff necessary
+            if visualize:
+                vis.draw_keypoints(out[1], meta['rgb'], meta['centers'], meta['scales'], meta['points'])
+                vis.draw_model(meta['rgb'], out_poses)
+                vis.cv_display(0)
 
     #plot errors
     evaluator.plot()
@@ -150,7 +115,8 @@ def main():
     #load weights and set seeed
     net = initialize_net(opt.weights, num_feats)
 
-    get_predictions(net, opt, num_feats, model_points, opt.visualize, opt.verbose)
+    #get predictions on dataset and evaluate wrt ground truth
+    get_predictions(net, opt.dataset, opt.obj_off, num_feats, model_points, opt.visualize, opt.verbose)
 
 if __name__=='__main__':
     main()

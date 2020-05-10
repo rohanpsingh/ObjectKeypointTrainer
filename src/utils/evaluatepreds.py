@@ -10,15 +10,11 @@ import cv2
 from utils.preprocess import *
 
 class EvaluatePreds(object):
-    def __init__(self, args, model_points, camera_mat):
-
-        self.mesh_filename = args.obj_off
-
-        self.visualize = args.visualize
-        self.verbose = args.verbose
+    def __init__(self, model_points, camera_mat, verbose):
 
         self.camera_mat = camera_mat
         self.model_points = model_points
+        self.verbose = verbose
 
         self.outlier_count = 0
         self.average_kpt_error = []
