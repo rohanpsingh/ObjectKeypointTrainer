@@ -39,26 +39,34 @@ def initialize_net(trained_weights, num_feats):
     print("====Loaded weights====")
     return net
 
-def get_predictions(net, dataset_dir, off_file, num_feats, model_points, visualize=False, verbose=False):
+def get_predictions(args):
+    #load 3D model points
+    with open(args.obj_inf) as file:
+        lines = [[float(i.rsplit('=')[1].rsplit('"')[1])
+                  for i in line.split()[1:4]] for line in file.readlines()[8:-1]]
+    model_points = np.asarray(lines).astype(np.float64, order='C')
+    num_feats = model_points.shape[0]
+
+    #load weights and set seeed
+    net = initialize_net(args.weights, num_feats)
 
     #load camera intrinsics (needed for 3D errors and visualization)
-    camera_mat = np.load(os.path.join(dataset_dir, 'camera_matrix.npy'))
+    camera_mat = np.load(os.path.join(args.dataset, 'camera_matrix.npy'))
 
     #set up evaluator and visualizer
-    evaluator = EvaluatePreds(model_points, camera_mat, verbose)
-    vis = VisualizePreds(off_file, camera_mat)
+    evaluator = EvaluatePreds(model_points, camera_mat, args.verbose)
+    vis = VisualizePreds(args.obj_off, camera_mat)
 
     #load pre-computed mean and std of dataset
-    meanstd_file = os.path.join(dataset_dir, 'mean.pth.tar')
+    mean, std = torch.zeros(3), torch.zeros(3)
+    meanstd_file = os.path.join(args.dataset, 'mean.pth.tar')
     if os.path.isfile(meanstd_file):
         meanstd = torch.load(meanstd_file)
         mean, std = meanstd['mean'], meanstd['std']
-    else:
-        mean, std = torch.zeros(3), torch.zeros(3)
 
     #load dataset using dataloader
-    eval_set = ObjectKeypointDataset(os.path.join(dataset_dir, "valid.txt"), num_feats, 256, 64, is_train=False)
-    eval_data = DataLoader(eval_set, batch_size=eval_batch_size, shuffle=True, num_workers=6)
+    eval_set = ObjectKeypointDataset(os.path.join(args.dataset, "valid.txt"), num_feats, 256, 64, is_train=False)
+    eval_data = DataLoader(eval_set, batch_size=eval_batch_size, shuffle=True, num_workers=0)
     print("valid data size is: {} batches of batch size: {}".format(len(eval_data), eval_batch_size))
 
     with torch.no_grad():
@@ -68,7 +76,7 @@ def get_predictions(net, dataset_dir, off_file, num_feats, model_points, visuali
             out = net(inp)
 
             #get evaluations
-            if verbose:
+            if args.verbose:
                 print("Batch: ", b)
             out_poses = evaluator.getTransformationsUsingPnP(out[1].cpu(), meta['centers'], meta['scales'])
             tru_poses = evaluator.getTransformationsUsingPnP(targets, meta['centers'], meta['scales'])
@@ -76,14 +84,13 @@ def get_predictions(net, dataset_dir, off_file, num_feats, model_points, visuali
             evaluator.calc_3d_errors(out_poses, tru_poses)
 
             #visualize iff necessary
-            if visualize:
+            if args.visualize:
                 vis.draw_keypoints(out[1], meta['rgb'], meta['centers'], meta['scales'], meta['points'])
                 vis.draw_model(meta['rgb'], out_poses)
-                vis.cv_display(0)
-
+                vis.draw_model(meta['rgb'], tru_poses)
+                vis.cv_display(0, "batch: " + repr(b))
     #plot errors
     evaluator.plot()
-
     return
 
 
@@ -101,18 +108,9 @@ def main():
     print("Dataset path: ", opt.dataset)
     print("Mesh path: ", opt.obj_off)
 
-    #load 3D model points
-    with open(opt.obj_inf) as file:
-        lines = [[float(i.rsplit('=')[1].rsplit('"')[1])
-                  for i in line.split()[1:4]] for line in file.readlines()[8:-1]]
-    model_points = np.asarray(lines).astype(np.float64, order='C')
-    num_feats = model_points.shape[0]
-
-    #load weights and set seeed
-    net = initialize_net(opt.weights, num_feats)
-
     #get predictions on dataset and evaluate wrt ground truth
-    get_predictions(net, opt.dataset, opt.obj_off, num_feats, model_points, opt.visualize, opt.verbose)
+    get_predictions(opt)
+    return
 
 if __name__=='__main__':
     main()
