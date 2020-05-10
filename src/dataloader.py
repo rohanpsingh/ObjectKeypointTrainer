@@ -56,7 +56,7 @@ class ObjectKeypointDataset(torch.utils.data.Dataset):
             heatmaps = heatmaps.unsqueeze(0)
         for img, maps in zip(images, heatmaps):
             img.add_(self.mean.unsqueeze(1).unsqueeze(1))
-            img= (255.0*img).permute(1,2,0).byte().numpy()[:,:,[2,1,0]]
+            img = (255.0*img).permute(1,2,0).byte().numpy()[:,:,[2,1,0]]
             img = np.ascontiguousarray(img)
             for hm in maps:
                 pt = np.asarray(np.unravel_index(hm.view(-1).max(0)[1].data, hm.size()))
@@ -82,15 +82,16 @@ class ObjectKeypointDataset(torch.utils.data.Dataset):
         keypts_filename = os.path.join(self.data_dir, "label", "label_" + suffix + ".txt")
         center_filename = os.path.join(self.data_dir, "center", "center_" + suffix + ".txt")
         scale_filename  = os.path.join(self.data_dir, "scale", "scales_" + suffix + ".txt")
-        keypts = torch.from_numpy(np.loadtxt(keypts_filename))
-        center = torch.from_numpy(np.loadtxt(center_filename))
-        scale  = torch.from_numpy(np.loadtxt(scale_filename))
+        keypts = torch.from_numpy(np.loadtxt(keypts_filename)).float()
+        center = torch.from_numpy(np.loadtxt(center_filename)).float()
+        scale  = torch.from_numpy(np.loadtxt(scale_filename)).float()
 
         #if training, apply image augmentation
         if self.is_train:
-            center = center*((1+0.25*(np.random.rand()-0.5)))
-            scale  = scale*((1+0.25*(np.random.rand()-0.5)))
-            rot_val = torch.randn(1).mul_(15).clamp(-2*15, 2*15)[0] if random.random() <= 0.6 else 0
+            center = center*((1+0.5*(np.random.rand()-0.5)))
+            scale  = scale*((1+0.5*(np.random.rand()-0.5)))
+            #rot_val = torch.randn(1).mul_(15).clamp(-2*15, 2*15)[0] if random.random() <= 0.6 else 0
+            rot_val = 0
 
             rgb_image[0, :, :].mul_(random.uniform(0.8, 1.2)).clamp_(0, 1)
             rgb_image[1, :, :].mul_(random.uniform(0.8, 1.2)).clamp_(0, 1)
