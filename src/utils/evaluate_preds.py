@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import statistics
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 from scipy.linalg import logm
 import transforms3d as tf3
 import math
@@ -17,6 +18,7 @@ class EvaluatePreds(object):
         self.model_points = model_points
         self.verbose = verbose
 
+        self.peak_thresh = 0.7
         self.outlier_count = 0
         self.list_kpt_error = []
         self.list_pos_error = []
@@ -42,16 +44,19 @@ class EvaluatePreds(object):
             for j in range(num_feats):
                 pk = np.asarray(np.unravel_index(heatmaps[i][j].view(-1).max(0)[1].data, heatmaps[i][j].size()))
                 pt = transform_hm_to_org(torch.from_numpy(pk).flip(0).float(), centers[i], scales[i])
-                if heatmaps[i,j].max() != 0.0:                                              #do not consider points outside the frame
+                if heatmaps[i,j].max() > self.peak_thresh:
                     pts_2d.append(pt.numpy())
                     pts_3d.append(self.model_points[j])
             a = np.ascontiguousarray(np.asarray(pts_2d)).reshape((len(pts_2d),1,2))
             b = np.ascontiguousarray(np.asarray(pts_3d)).reshape((len(pts_3d),1,3))
-            #_, rvec, tvec, inl = cv2.solvePnPRansac(b, a, self.camera_mat, None, None, None, False, 1000, 1, 0.95, None, cv2.SOLVEPNP_EPNP)
-            _, rvec, tvec = cv2.solvePnP(b, a, self.camera_mat, None, None, None, False, cv2.SOLVEPNP_EPNP)
             tf = np.eye(4)
-            tf[:3,:3] = cv2.Rodrigues(rvec)[0]
-            tf[:3, 3] = tvec[:,0]
+            try:
+                #_, rvec, tvec, inl = cv2.solvePnPRansac(b, a, self.camera_mat, None, None, None, False, 1000, 1, 0.95, None, cv2.SOLVEPNP_EPNP)
+                _, rvec, tvec = cv2.solvePnP(b, a, self.camera_mat, None, None, None, False, cv2.SOLVEPNP_ITERATIVE)
+                tf[:3,:3] = cv2.Rodrigues(rvec)[0]
+                tf[:3, 3] = tvec[:,0]
+            except Exception as e:
+                print(e)
             T[i] = torch.from_numpy(tf)                                             #To return pose of camera instead of object
         return T
 
@@ -70,11 +75,12 @@ class EvaluatePreds(object):
             geo_error = np.linalg.norm(logm(np.dot(np.linalg.inv(tru_tf[:3,:3]), est_tf[:3,:3]), disp=False)[0])/np.sqrt(2)
             if (np.linalg.norm(pos_error)>0.1) or  (np.sum(rot_error) > 30):
                 self.outlier_count += 1
-            self.list_pos_error.append(pos_error.round(4))
-            self.list_rot_error.append((rot_error).round(2))
-            self.list_geo_error.append(geo_error*180/math.pi)
-            self.list_est_rot.append(est_euler)
-            self.list_tru_rot.append(tru_euler)
+            if not (est_tf==np.eye(4)).all():
+                self.list_pos_error.append(pos_error.round(4))
+                self.list_rot_error.append((rot_error).round(2))
+                self.list_geo_error.append(geo_error*180/math.pi)
+                self.list_est_rot.append(est_euler)
+                self.list_tru_rot.append(tru_euler)
 
         if self.verbose:
             print("\tPosition error(meters): {}".format(self.list_pos_error[-1]))
@@ -97,7 +103,6 @@ class EvaluatePreds(object):
         self.list_kpt_error.append(float(sum(batch_kpt_error)/len(batch_kpt_error)))
         if self.verbose:
             print("\tKeypoint error(pixels): {} \t(avg: {})".format(batch_kpt_error, self.list_kpt_error[-1]))
-
         return
 
     def plot(self):
@@ -113,44 +118,61 @@ class EvaluatePreds(object):
         print("Mean geo error: ", statistics.mean(self.list_geo_error))
         print("Median geo error: ", statistics.median(self.list_geo_error))
 
-        fig, axs = plt.subplots(3, 3)
+        grid = GridSpec(4, 3)
+        fig = plt.figure()
+        fig.clf()
+
+        ax0 = fig.add_subplot(grid[0,0])
+        ax1 = fig.add_subplot(grid[1,0])
+        ax2 = fig.add_subplot(grid[2,0])
+        ax3 = fig.add_subplot(grid[0,1])
+        ax4 = fig.add_subplot(grid[1,1])
+        ax5 = fig.add_subplot(grid[2,1])
+        ax6 = fig.add_subplot(grid[0,2])
+        ax7 = fig.add_subplot(grid[1,2])
+        ax8 = fig.add_subplot(grid[2,2])
+        ax9 = fig.add_subplot(grid[3,:])
         fig.suptitle("Avg errors in position(m), avg errors in rotation(deg), and absolute true+estimated rotation(deg)")
 
-        axs[0,0].plot(np.asarray(self.list_pos_error)[:, 0])
-        axs[0,0].set(ylabel='pos_error_x')
-        axs[0,0].grid(True)
+        ax0.plot(np.asarray(self.list_pos_error)[:, 0])
+        ax0.set_ylabel('pos_error_x')
+        ax0.grid(True)
 
-        axs[1,0].plot(np.asarray(self.list_pos_error)[:, 1])
-        axs[1,0].set(ylabel='pos_error_y')
-        axs[1,0].grid(True)
+        ax1.plot(np.asarray(self.list_pos_error)[:, 1])
+        ax1.set_ylabel('pos_error_y')
+        ax1.grid(True)
 
-        axs[2,0].plot(np.asarray(self.list_pos_error)[:, 2])
-        axs[2,0].set(ylabel='pos_error_z')
-        axs[2,0].grid(True)
+        ax2.plot(np.asarray(self.list_pos_error)[:, 2])
+        ax2.set_ylabel('pos_error_z')
+        ax2.grid(True)
 
-        axs[0,1].plot(np.asarray(self.list_rot_error)[:, 0])
-        axs[0,1].set(ylabel='rot_error_x')
-        axs[0,1].grid(True)
+        ax3.plot(np.asarray(self.list_rot_error)[:, 0])
+        ax3.set_ylabel('rot_error_x')
+        ax3.grid(True)
 
-        axs[1,1].plot(np.asarray(self.list_rot_error)[:, 1])
-        axs[1,1].set(ylabel='rot_error_y')
-        axs[1,1].grid(True)
+        ax4.plot(np.asarray(self.list_rot_error)[:, 1])
+        ax4.set_ylabel('rot_error_y')
+        ax4.grid(True)
 
-        axs[2,1].plot(np.asarray(self.list_rot_error)[:, 2])
-        axs[2,1].set(ylabel='rot_error_z')
-        axs[2,1].grid(True)
+        ax5.plot(np.asarray(self.list_rot_error)[:, 2])
+        ax5.set_ylabel('rot_error_z')
+        ax5.grid(True)
 
-        axs[0,2].plot(zip(np.asarray(self.list_tru_rot)[:, 0], np.asarray(self.list_est_rot)[:, 0]))
-        axs[0,2].set(ylabel='rot_track_x')
-        axs[0,2].grid(True)
+        ax6.plot(zip(np.asarray(self.list_tru_rot)[:, 0], np.asarray(self.list_est_rot)[:, 0]))
+        ax6.set_ylabel('rot_track_x')
+        ax6.grid(True)
 
-        axs[1,2].plot(zip(np.asarray(self.list_tru_rot)[:, 1], np.asarray(self.list_est_rot)[:, 1]))
-        axs[1,2].set(ylabel='rot_track_y')
-        axs[1,2].grid(True)
+        ax7.plot(zip(np.asarray(self.list_tru_rot)[:, 1], np.asarray(self.list_est_rot)[:, 1]))
+        ax7.set_ylabel('rot_track_y')
+        ax7.grid(True)
 
-        axs[2,2].plot(zip(np.asarray(self.list_tru_rot)[:, 2], np.asarray(self.list_est_rot)[:, 2]))
-        axs[2,2].set(ylabel='rot_track_z')
-        axs[2,2].grid(True)
+        ax8.plot(zip(np.asarray(self.list_tru_rot)[:, 2], np.asarray(self.list_est_rot)[:, 2]))
+        ax8.set_ylabel('rot_track_z')
+        ax8.grid(True)
+
+        ax9.plot(zip(np.asarray(self.list_kpt_error)))
+        ax9.set_ylabel('kpt_pix_error')
+        ax9.grid(True)
 
         plt.show()
         return
