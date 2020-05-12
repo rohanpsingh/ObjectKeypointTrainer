@@ -62,10 +62,10 @@ class VisualizePreds(object):
             imgpoints,_ = cv2.projectPoints(self.verts, rvec, tvec, self.camera_mat, None)
             face_pts = [[tuple((int(imgpoints[idx,0,0]), int(imgpoints[idx,0,1]))) for idx in face] for face in self.faces]
             #add some faces
-            for face in random.sample(face_pts, 10000):
+            for face in random.sample(face_pts, int(0.1*(len(face_pts)))):
                 cv2.fillPoly(img, [np.asarray(face)], (0,255,255))
             #add some vertices
-            for pt in random.sample(imgpoints, 10000):
+            for pt in random.sample(imgpoints, int(0.1*(len(imgpoints)))):
                 cv2.circle(img, tuple((int(pt[0,0]), int(pt[0,1]))), 1, (255,0,0), -1)
         self.disp_images.append(img)
         return
