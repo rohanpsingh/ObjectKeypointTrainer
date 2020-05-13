@@ -1,7 +1,5 @@
 from __future__ import print_function
-import os
 import numpy as np
-import torch
 import statistics
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
@@ -9,16 +7,19 @@ from scipy.linalg import logm
 import transforms3d as tf3
 import math
 import cv2
-from utils.preprocess import *
+
+from utils.preprocess import transform_hm_to_org
 
 class EvaluatePreds(object):
-    def __init__(self, model_points, camera_mat, verbose):
+    def __init__(self, model_points, camera_mat, verbose, peak_thresh=0.7):
 
+        #initialize
         self.camera_mat = camera_mat
         self.model_points = model_points
         self.verbose = verbose
+        self.peak_thresh = peak_thresh
 
-        self.peak_thresh = 0.7
+        #evaluation metrics
         self.outlier_count = 0
         self.list_kpt_error = []
         self.list_pos_error = []
@@ -27,44 +28,49 @@ class EvaluatePreds(object):
         self.list_est_rot = []
         self.list_tru_rot = []
 
+    def getKeypointsFromHeatmaps(self, heatmaps, centers, scales):
+        '''
+        Extracts pixel locations of peaks in heatmaps and transforms
+        to original image coordinates. Keypoint pixel locations are
+        stared in a dictionary with keys corresponding to keypoint ID.
+        Returns a list of dictionaries.
+        '''
+        keypoints = []
+        for maps, center, scale in zip(heatmaps, centers, scales):
+            feat_dict = {i:[] for i in range(len(maps))}
+            for idx, hm in enumerate(maps):
+                pk = np.asarray(np.unravel_index(hm.argmax(), hm.shape))
+                pt = transform_hm_to_org(pk[::-1], np.array(center), float(scale))
+                if hm.max() > self.peak_thresh:
+                    feat_dict[idx] = tuple(pt)
+            keypoints.append(feat_dict)
+        return keypoints
 
-    def getTransformationsUsingPnP(self, heatmaps, centers, scales):
+    def getTransformationsUsingPnP(self, imagepoints):
         '''
         Estimates pose of camera in object frame
         given the heatmap and bounding box predictions.
-        Input: Heatmaps, bbox centers, bbox scales
+        Input: List of dictionaries
         Output: 4x4 homogenous matrix
         '''
-        batch_size = heatmaps.size(0)
-        num_feats = heatmaps.size(1)
-        T = torch.zeros(batch_size, 4, 4)
-        for i in range(batch_size):
-            pts_2d = []
-            pts_3d = []
-            for j in range(num_feats):
-                pk = np.asarray(np.unravel_index(heatmaps[i][j].view(-1).max(0)[1].data, heatmaps[i][j].size()))
-                pt = transform_hm_to_org(torch.from_numpy(pk).flip(0).float(), centers[i], scales[i])
-                if heatmaps[i,j].max() > self.peak_thresh:
-                    pts_2d.append(pt.numpy())
-                    pts_3d.append(self.model_points[j])
-            a = np.ascontiguousarray(np.asarray(pts_2d)).reshape((len(pts_2d),1,2))
-            b = np.ascontiguousarray(np.asarray(pts_3d)).reshape((len(pts_3d),1,3))
+        T = np.zeros((len(imagepoints), 4, 4))
+        for idx, imagedict in enumerate(imagepoints):
+            pts_2d = [val for i,val in imagedict.items() if any(val)]
+            pts_3d = [self.model_points[i] for i,val in imagedict.items() if any(val)]
+            pts_2d = np.ascontiguousarray(np.asarray(pts_2d)).reshape((len(pts_2d),1,2))
+            pts_3d = np.ascontiguousarray(np.asarray(pts_3d)).reshape((len(pts_3d),1,3))
             tf = np.eye(4)
             try:
-                #_, rvec, tvec, inl = cv2.solvePnPRansac(b, a, self.camera_mat, None, None, None, False, 1000, 1, 0.95, None, cv2.SOLVEPNP_EPNP)
-                _, rvec, tvec = cv2.solvePnP(b, a, self.camera_mat, None, None, None, False, cv2.SOLVEPNP_ITERATIVE)
-                tf[:3,:3] = cv2.Rodrigues(rvec)[0]
-                tf[:3, 3] = tvec[:,0]
+                #_, rvec, tvec, inl = cv2.solvePnPRansac(pts_3d, pts_2d, self.camera_mat, None, None, None, False, 1000, 1, 0.95, None, cv2.SOLVEPNP_EPNP)
+                _, rvec, tvec = cv2.solvePnP(pts_3d, pts_2d, self.camera_mat, None, None, None, False, cv2.SOLVEPNP_EPNP)
+                T[idx, :3,:3] = cv2.Rodrigues(rvec)[0]
+                T[idx, :3, 3] = tvec[:,0]
             except Exception as e:
                 print(e)
-            T[i] = torch.from_numpy(tf)                                             #To return pose of camera instead of object
         return T
 
     def calc_3d_errors(self, est_pos_batch, tru_pos_batch):
-        batch_size = est_pos_batch.size(0)
-        for i in range(batch_size):
-            est_tf = est_pos_batch[i].numpy()
-            tru_tf = tru_pos_batch[i].numpy()
+        for est_tf, tru_tf in zip(est_pos_batch, tru_pos_batch):
             #position errors
             pos_error = np.abs(est_tf[:3,3] - tru_tf[:3,3])
             #rotation errors
@@ -81,28 +87,19 @@ class EvaluatePreds(object):
                 self.list_geo_error.append(geo_error*180/math.pi)
                 self.list_est_rot.append(est_euler)
                 self.list_tru_rot.append(tru_euler)
-
         if self.verbose:
             print("\tPosition error(meters): {}".format(self.list_pos_error[-1]))
             print("\tRotation error(degree): {}".format(self.list_rot_error[-1]))
         return
 
 
-    def calc_2d_errors(self, heatmaps, tru_pts_batch, centers, scales):
-        batch_kpt_error = []
-        batch_size = heatmaps.size(0)
-        num_feats = heatmaps.size(1)
-        for i in range(batch_size):
-            for j in range(num_feats):
-                out_points = np.asarray(np.unravel_index(heatmaps[i][j].cpu().view(-1).max(0)[1].data, heatmaps[i][j].size()))
-                out_points = transform_hm_to_org(torch.from_numpy(np.asarray(out_points)).flip(0).float(), centers[i], scales[i]).numpy()
-                tru_points = tru_pts_batch[i][j].numpy()
-                dist = torch.from_numpy(out_points - tru_points).float().norm(2).data
-                batch_kpt_error.append(round(dist.item(),2))
-
-        self.list_kpt_error.append(float(sum(batch_kpt_error)/len(batch_kpt_error)))
-        if self.verbose:
-            print("\tKeypoint error(pixels): {} \t(avg: {})".format(batch_kpt_error, self.list_kpt_error[-1]))
+    def calc_2d_errors(self, est_pts_batch, tru_pts_batch):
+        for d1, d2 in zip(est_pts_batch, tru_pts_batch):
+            e = [(np.asarray(est[1])-np.asarray(tru[1])) for est, tru in zip(d1.items(), d2.items()) if any(est[1])]
+            batch_kpt_error = [round(np.linalg.norm(i), 2) for i in e]
+            self.list_kpt_error.append(float(sum(batch_kpt_error)/len(batch_kpt_error)))
+            if self.verbose:
+                print("\tKeypoint error(pixels): {} \t(avg: {})".format(batch_kpt_error, self.list_kpt_error[-1]))
         return
 
     def plot(self):

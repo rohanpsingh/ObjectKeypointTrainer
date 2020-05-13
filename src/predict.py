@@ -49,20 +49,18 @@ def get_predictions(args):
 
     #load weights and set seeed
     net = initialize_net(args.weights, num_feats)
-
     #load camera intrinsics (needed for 3D errors and visualization)
     camera_mat = np.load(os.path.join(args.dataset, 'camera_matrix.npy'))
-
-    #set up evaluator and visualizer
-    evaluator = EvaluatePreds(model_points, camera_mat, args.verbose)
-    vis = VisualizePreds(args.obj_off, camera_mat)
-
     #load pre-computed mean and std of dataset
     mean, std = torch.zeros(3), torch.zeros(3)
     meanstd_file = os.path.join(args.dataset, 'mean.pth.tar')
     if os.path.isfile(meanstd_file):
         meanstd = torch.load(meanstd_file)
         mean, std = meanstd['mean'], meanstd['std']
+
+    #set up evaluator and visualizer
+    evaluator = EvaluatePreds(model_points, camera_mat, args.verbose)
+    vis = VisualizePreds(args.obj_off, camera_mat)
 
     #load dataset using dataloader
     eval_set = ObjectKeypointDataset(os.path.join(args.dataset, "valid.txt"), num_feats, 256, 64, is_train=False)
@@ -78,16 +76,23 @@ def get_predictions(args):
             #get evaluations
             if args.verbose:
                 print("Batch: ", b)
-            out_poses = evaluator.getTransformationsUsingPnP(out[1].cpu(), meta['centers'], meta['scales'])
-            tru_poses = evaluator.getTransformationsUsingPnP(targets, meta['centers'], meta['scales'])
-            evaluator.calc_2d_errors(out[1].cpu(), meta['points'], meta['centers'], meta['scales'])
+
+            est_keypoints = evaluator.getKeypointsFromHeatmaps(out[1].cpu().numpy(), meta['centers'], meta['scales'])
+            #tru_keypoints = evaluator.getKeypointsFromHeatmaps(targets.numpy(), meta['centers'], meta['scales'])
+            tru_keypoints = [{idx:tuple(i.tolist()) for idx,i in enumerate(batch)} for batch in meta['points']]
+
+            out_poses = evaluator.getTransformationsUsingPnP(est_keypoints)
+            tru_poses = evaluator.getTransformationsUsingPnP(tru_keypoints)
+
+            evaluator.calc_2d_errors(est_keypoints, tru_keypoints)
             evaluator.calc_3d_errors(out_poses, tru_poses)
 
             #visualize iff necessary
             if args.visualize:
-                vis.draw_keypoints(out[1], meta['rgb'], meta['centers'], meta['scales'], meta['points'])
-                vis.draw_model(meta['rgb'], out_poses)
-                vis.draw_model(meta['rgb'], tru_poses)
+                vis.set_canvas(meta['rgb'])
+                vis.draw_keypoints(est_keypoints, tru_keypoints)
+                vis.draw_model(out_poses)
+                vis.draw_model(tru_poses, color=(0, 255, 0))
                 vis.cv_display(0, "batch: " + repr(b))
     #plot errors
     evaluator.plot()
