@@ -1,5 +1,5 @@
-import cv2
 import random
+import cv2
 import numpy as np
 
 class VisualizePreds(object):
@@ -7,13 +7,11 @@ class VisualizePreds(object):
         #camera intrinsics
         self.camera_mat = camera_mat
         #read object .off file to get vertices and faces
-        v,f  = self.read_off(mesh_filename)
-        self.verts = v
-        self.faces = f
+        self.verts, self.faces = self.read_off(mesh_filename)
         #list of images to display
         self.org_canvas = []
         self.out_images = []
-        
+
     def read_off(self, filename):
         """
         Parses a '.off' file and return lists of vertices and faces as numpy arrays.
