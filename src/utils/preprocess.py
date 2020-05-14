@@ -39,7 +39,7 @@ def color_normalize(x, mean, std):
     if x.size(0) == 1:
         x = x.repeat(3, 1, 1)
 
-    for t, m, s in zip(x, mean, std):
+    for t, m, _ in zip(x, mean, std):
         t.sub_(m)
     return x
 
@@ -56,7 +56,7 @@ def get_transform(center, scale, res, rot=0):
     t[0, 2] = res[1] * (-float(center[0]) / h + .5)
     t[1, 2] = res[0] * (-float(center[1]) / h + .5)
     t[2, 2] = 1
-    if not rot == 0:
+    if rot != 0:
         rot = -rot # To match direction of rotation from cropping
         rot_mat = np.zeros((3,3))
         rot_rad = rot * np.pi / 180
@@ -110,7 +110,7 @@ def crop(img, center, scale, res, rot=0):
 
     # Padding so that when rotated proper amount of context is included
     pad = int(np.linalg.norm(br - ul) / 2 - float(br[1] - ul[1]) / 2)
-    if not rot == 0:
+    if rot != 0:
         ul -= pad
         br += pad
 
@@ -127,7 +127,7 @@ def crop(img, center, scale, res, rot=0):
     old_y = max(0, ul[1]), min(len(img), br[1])
     new_img[new_y[0]:new_y[1], new_x[0]:new_x[1]] = img[old_y[0]:old_y[1], old_x[0]:old_x[1]]
 
-    if not rot == 0:
+    if rot != 0:
         # Remove padding
         new_img = scipy.misc.imrotate(new_img, rot)
         new_img = new_img[pad:-pad, pad:-pad]

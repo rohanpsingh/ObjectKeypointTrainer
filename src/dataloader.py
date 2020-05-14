@@ -1,9 +1,9 @@
-import torch
-import numpy as np
 import os
-import matplotlib.pyplot as plt
 import re
 import random
+import numpy as np
+import torch
+import matplotlib.pyplot as plt
 import cv2
 
 from utils.preprocess import im_to_torch, to_torch
@@ -14,6 +14,10 @@ from utils.drawgaussian import draw_labelmap
 
 
 class ObjectKeypointDataset(torch.utils.data.Dataset):
+    """
+    This class loads a custom dataset.
+    Inherits from pytorch data.Dataset class.
+    """
     def __init__(self, txt_path, num_feats, inp_res, out_res, is_train=True, visualize=False):
         self.txt_path = txt_path
         self.num_features = num_feats
@@ -62,10 +66,12 @@ class ObjectKeypointDataset(torch.utils.data.Dataset):
             img.add_(self.mean.unsqueeze(1).unsqueeze(1))
             img = (255.0*img).permute(1,2,0).byte().numpy()[:,:,[2,1,0]]
             img = np.ascontiguousarray(img)
-            for hm in maps:
-                pt = np.asarray(np.unravel_index(hm.view(-1).max(0)[1].data, hm.size()))
-                pt = transform_hm_to_org(torch.from_numpy(pt).flip(0), torch.tensor([self.inp_res/2]), self.inp_res/200.0).numpy()
-                cv2.circle(img, tuple(map(int, pt)), 5, (0,255,0), -1)
+            for heat_map in maps:
+                peak_loc = np.asarray(np.unravel_index(heat_map.view(-1).max(0)[1].data, heat_map.size()))
+                peak_loc = transform_hm_to_org(torch.from_numpy(peak_loc).flip(0),
+                                               torch.tensor([self.inp_res/2]),
+                                               self.inp_res/200.0).numpy()
+                cv2.circle(img, tuple(map(int, peak_loc)), 5, (0,255,0), -1)
             cv2.imshow("win", img)
             cv2.waitKey(0)
         return
@@ -76,7 +82,7 @@ class ObjectKeypointDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         #get image file name
         image_file = self.image_list[index]
-        title, ext = os.path.splitext(os.path.basename(image_file))
+        title, _ = os.path.splitext(os.path.basename(image_file))
         suffix = re.split("_",title)[1]
 
         #read rgb image
@@ -109,8 +115,8 @@ class ObjectKeypointDataset(torch.utils.data.Dataset):
 
         #this is the target image
         tar = torch.zeros(self.num_features, self.out_res, self.out_res)
-        for idx, pt in enumerate(keypts):
-            pt_tf = to_torch(transform(pt, center, scale, [self.out_res, self.out_res], rot=rot_val))
+        for idx, key_pt in enumerate(keypts):
+            pt_tf = to_torch(transform(key_pt, center, scale, [self.out_res, self.out_res], rot=rot_val))
             tar[idx], _ = draw_labelmap(tar[idx].numpy(), pt_tf, 1.0)
 
         if self.visualize:

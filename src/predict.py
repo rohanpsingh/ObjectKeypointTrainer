@@ -1,15 +1,11 @@
-from __future__ import print_function
-import warnings
-warnings.filterwarnings("ignore", message="numpy.dtype size changed")
-warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
-
-import torch
-import numpy as np
-import torch.backends.cudnn as cudnn
-from torch.utils.data import DataLoader
 import random
 import argparse
 import os
+import numpy as np
+
+import torch
+import torch.backends.cudnn as cudnn
+from torch.utils.data import DataLoader
 
 from utils.evaluate_preds import EvaluatePreds
 from utils.visualize_preds import VisualizePreds
@@ -17,22 +13,22 @@ from dataloader import ObjectKeypointDataset
 from models.StackedHourGlass import StackedHourGlass
 
 np.set_printoptions(suppress=True)
-net_inp_res = 256
-net_out_size = 64
-eval_batch_size = 1
+NET_INP_RES = 256
+NET_OUT_RES = 64
+EVAL_BATCH_SIZE = 1
 
 def initialize_net(trained_weights, num_feats):
-    net = StackedHourGlass(256, 2, 2, 4, num_feats).cuda()
+    net = StackedHourGlass(NET_INP_RES, 2, 2, 4, num_feats).cuda()
     net = torch.nn.DataParallel(net).cuda()
     net.eval()
     net.load_state_dict(torch.load(trained_weights))
-    manualSeed = 0
-    print("Random Seed: ", manualSeed)
-    random.seed(manualSeed)
-    np.random.seed(manualSeed)
-    torch.manual_seed(manualSeed)
-    torch.cuda.manual_seed(manualSeed)
-    torch.cuda.manual_seed_all(manualSeed)
+    manual_seed = 0
+    print("Random Seed: ", manual_seed)
+    random.seed(manual_seed)
+    np.random.seed(manual_seed)
+    torch.manual_seed(manual_seed)
+    torch.cuda.manual_seed(manual_seed)
+    torch.cuda.manual_seed_all(manual_seed)
     torch.set_default_tensor_type(torch.FloatTensor)
     cudnn.deterministic=True
     cudnn.benchmark = False
@@ -51,39 +47,33 @@ def get_predictions(args):
     net = initialize_net(args.weights, num_feats)
     #load camera intrinsics (needed for 3D errors and visualization)
     camera_mat = np.load(os.path.join(args.dataset, 'camera_matrix.npy'))
-    #load pre-computed mean and std of dataset
-    mean, std = torch.zeros(3), torch.zeros(3)
-    meanstd_file = os.path.join(args.dataset, 'mean.pth.tar')
-    if os.path.isfile(meanstd_file):
-        meanstd = torch.load(meanstd_file)
-        mean, std = meanstd['mean'], meanstd['std']
 
     #set up evaluator and visualizer
     evaluator = EvaluatePreds(model_points, camera_mat, args.verbose)
     vis = VisualizePreds(args.obj_off, camera_mat)
 
     #load dataset using dataloader
-    eval_set = ObjectKeypointDataset(os.path.join(args.dataset, "valid.txt"), num_feats, 256, 64, is_train=False)
-    eval_data = DataLoader(eval_set, batch_size=eval_batch_size, shuffle=True, num_workers=0)
-    print("valid data size is: {} batches of batch size: {}".format(len(eval_data), eval_batch_size))
+    eval_set = ObjectKeypointDataset(os.path.join(args.dataset, "valid.txt"), num_feats, NET_INP_RES, NET_OUT_RES, is_train=False)
+    eval_data = DataLoader(eval_set, batch_size=EVAL_BATCH_SIZE, shuffle=True, num_workers=0)
+    print("valid data size is: {} batches of batch size: {}".format(len(eval_data), EVAL_BATCH_SIZE))
 
     with torch.no_grad():
-        for b, (inputs, targets, meta) in enumerate(eval_data):
+        for batch_id, (inputs, targets, meta) in enumerate(eval_data):
             #forward pass through network
             inp = torch.autograd.Variable(inputs.cuda())
             out = net(inp)
 
             #get evaluations
             if args.verbose:
-                print("Batch: ", b)
+                print("Batch: ", batch_id)
 
-            est_keypoints = evaluator.getKeypointsFromHeatmaps(out[1].cpu().numpy(), meta['centers'], meta['scales'])
-            #tru_keypoints = evaluator.getKeypointsFromHeatmaps(targets.numpy(), meta['centers'], meta['scales'])
+            est_keypoints = evaluator.get_keypoints_from_heatmaps(out[1].cpu().numpy(), meta['centers'], meta['scales'])
+            #tru_keypoints = evaluator.get_keypoints_from_heatmaps(targets.numpy(), meta['centers'], meta['scales'])
             tru_keypoints = [{idx:tuple(i.tolist()) for idx,i in enumerate(batch)} for batch in meta['points']]
             #tru_with_noise = [{idx:tuple((i*(1 + (np.random.rand()-0.5)*0.02)).tolist()) for idx,i in enumerate(batch)} for batch in meta['points']]
 
-            out_poses = evaluator.getTransformationsUsingPnP(est_keypoints)
-            tru_poses = evaluator.getTransformationsUsingPnP(tru_keypoints)
+            out_poses = evaluator.get_pose_using_pnp(est_keypoints)
+            tru_poses = evaluator.get_pose_using_pnp(tru_keypoints)
 
             evaluator.calc_2d_errors(est_keypoints, tru_keypoints)
             evaluator.calc_3d_errors(out_poses, tru_poses)
@@ -94,7 +84,7 @@ def get_predictions(args):
                 vis.draw_keypoints(est_keypoints, tru_keypoints)
                 vis.draw_model(out_poses)
                 vis.draw_model(tru_poses, color=(0, 255, 0))
-                vis.cv_display(0, "batch: " + repr(b))
+                vis.cv_display(0, "batch: " + repr(batch_id))
     #plot errors
     evaluator.plot()
     return

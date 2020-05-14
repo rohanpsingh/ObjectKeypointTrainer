@@ -1,18 +1,22 @@
 from __future__ import print_function
-import numpy as np
+import math
 import statistics
+import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from scipy.linalg import logm
 import transforms3d as tf3
-import math
 import cv2
 
 from utils.preprocess import transform_hm_to_org
 
-class EvaluatePreds(object):
+class EvaluatePreds():
+    """
+    This class provides functions to evaluate heatmap predictions
+    from an hourglass network against a given ground truth to
+    calculate 2D and 3D error metrics.
+    """
     def __init__(self, model_points, camera_mat, verbose, peak_thresh=0.7):
-
         #initialize
         self.camera_mat = camera_mat
         self.model_points = model_points
@@ -28,13 +32,13 @@ class EvaluatePreds(object):
         self.list_est_rot = []
         self.list_tru_rot = []
 
-    def getKeypointsFromHeatmaps(self, heatmaps, centers, scales):
-        '''
+    def get_keypoints_from_heatmaps(self, heatmaps, centers, scales):
+        """
         Extracts pixel locations of peaks in heatmaps and transforms
         to original image coordinates. Keypoint pixel locations are
         stared in a dictionary with keys corresponding to keypoint ID.
         Returns a list of dictionaries.
-        '''
+        """
         keypoints = []
         for maps, center, scale in zip(heatmaps, centers, scales):
             feat_dict = {i:[] for i in range(len(maps))}
@@ -46,28 +50,27 @@ class EvaluatePreds(object):
             keypoints.append(feat_dict)
         return keypoints
 
-    def getTransformationsUsingPnP(self, imagepoints):
-        '''
+    def get_pose_using_pnp(self, imagepoints):
+        """
         Estimates pose of camera in object frame
         given the heatmap and bounding box predictions.
         Input: List of dictionaries
         Output: 4x4 homogenous matrix
-        '''
-        T = np.zeros((len(imagepoints), 4, 4))
+        """
+        out_poses = np.zeros((len(imagepoints), 4, 4))
         for idx, imagedict in enumerate(imagepoints):
             pts_2d = [val for i,val in imagedict.items() if any(val)]
             pts_3d = [self.model_points[i] for i,val in imagedict.items() if any(val)]
             pts_2d = np.ascontiguousarray(np.asarray(pts_2d)).reshape((len(pts_2d),1,2))
             pts_3d = np.ascontiguousarray(np.asarray(pts_3d)).reshape((len(pts_3d),1,3))
-            tf = np.eye(4)
             try:
                 #_, rvec, tvec, inl = cv2.solvePnPRansac(pts_3d, pts_2d, self.camera_mat, None, None, None, False, 100, 5, flags=cv2.SOLVEPNP_EPNP)
                 _, rvec, tvec = cv2.solvePnP(pts_3d, pts_2d, self.camera_mat, None, None, None, False, cv2.SOLVEPNP_EPNP)
-                T[idx, :3,:3] = cv2.Rodrigues(rvec)[0]
-                T[idx, :3, 3] = tvec[:,0]
+                out_poses[idx, :3,:3] = cv2.Rodrigues(rvec)[0]
+                out_poses[idx, :3, 3] = tvec[:,0]
             except Exception as e:
                 print(e)
-        return T
+        return out_poses
 
     def calc_3d_errors(self, est_pos_batch, tru_pos_batch):
         for est_tf, tru_tf in zip(est_pos_batch, tru_pos_batch):
@@ -76,7 +79,7 @@ class EvaluatePreds(object):
             #rotation errors
             est_euler = np.asarray(tf3.euler.mat2euler(est_tf[:3,:3]))*180/math.pi
             tru_euler = np.asarray(tf3.euler.mat2euler(tru_tf[:3,:3]))*180/math.pi
-            rot_error = np.abs(np.asarray([(e-360) if e>180 else ((e+360) if e<-180 else e)  for e in (est_euler-tru_euler)]))
+            rot_error = np.abs(np.asarray([(e-360) if e>180 else ((e+360) if e<-180 else e)  for e in est_euler-tru_euler]))
             #rotation errors (geodesic distance)
             geo_error = np.linalg.norm(logm(np.dot(np.linalg.inv(tru_tf[:3,:3]), est_tf[:3,:3]), disp=False)[0])/np.sqrt(2)
             if (np.linalg.norm(pos_error)>0.1) or  (np.sum(rot_error) > 30):
@@ -94,9 +97,11 @@ class EvaluatePreds(object):
 
 
     def calc_2d_errors(self, est_pts_batch, tru_pts_batch):
-        for d1, d2 in zip(est_pts_batch, tru_pts_batch):
-            e = [(np.asarray(est[1])-np.asarray(tru[1])) for est, tru in zip(d1.items(), d2.items()) if any(est[1])]
-            batch_kpt_error = [round(np.linalg.norm(i), 2) for i in e]
+        for est_pts, tru_pts in zip(est_pts_batch, tru_pts_batch):
+            assert isinstance(est_pts, dict)
+            assert isinstance(tru_pts, dict)
+            batch_kpt_error = [(np.asarray(est[1])-np.asarray(tru[1])) for est, tru in zip(est_pts.items(), tru_pts.items()) if any(est[1])]
+            batch_kpt_error = [round(np.linalg.norm(i), 2) for i in batch_kpt_error]
             self.list_kpt_error.append(float(sum(batch_kpt_error)/len(batch_kpt_error)))
             if self.verbose:
                 print("\tKeypoint error(pixels): {} \t(avg: {})".format(batch_kpt_error, self.list_kpt_error[-1]))

@@ -2,12 +2,12 @@ import random
 import cv2
 import numpy as np
 
-class VisualizePreds(object):
+class VisualizePreds():
     def __init__(self, mesh_filename, camera_mat):
         #camera intrinsics
         self.camera_mat = camera_mat
         #read object .off file to get vertices and faces
-        self.verts, self.faces = self.read_off(mesh_filename)
+        self.read_off(mesh_filename)
         #list of images to display
         self.org_canvas = []
         self.out_images = []
@@ -20,11 +20,13 @@ class VisualizePreds(object):
         """
         with open(filename) as f:
             if 'OFF' != f.readline().strip():
-                raise('Not a valid OFF header')
-            n_verts, n_faces, n_dontknow = tuple([int(s) for s in f.readline().strip().split(' ')])
+                raise 'Not a valid OFF header'
+            n_verts, n_faces, _ = tuple([int(s) for s in f.readline().strip().split(' ')])
             verts = [[float(s) for s in f.readline().strip().split(' ')] for i_vert in range(n_verts)]
             faces = [[int(s) for s in f.readline().strip().split(' ')][1:] for i_face in range(n_faces)]
-        return np.array(verts), np.array(faces)
+            self.verts = np.array(verts)
+            self.faces = np.array(faces)
+        return
 
     def set_canvas(self, input_tensor):
         """
@@ -44,8 +46,8 @@ class VisualizePreds(object):
         Appends canvas to list.
         Returns: None
         """
-        assert(len(est_pts_batch)==len(self.org_canvas))
-        assert(len(tru_pts_batch)==len(self.org_canvas))
+        assert len(est_pts_batch)==len(self.org_canvas)
+        assert len(tru_pts_batch)==len(self.org_canvas)
         for feats1, feats2, img in zip(est_pts_batch, tru_pts_batch, self.org_canvas):
             canvas = img.copy()
             if isinstance(feats1, dict):
