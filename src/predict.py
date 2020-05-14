@@ -85,6 +85,7 @@ def get_predictions(args):
                 vis.draw_model(out_poses)
                 vis.draw_model(tru_poses, color=(0, 255, 0))
                 vis.cv_display(0, "batch: " + repr(batch_id))
+                #vis.visualize_3d(out_poses[0], tru_poses[0])
     #plot errors
     evaluator.plot()
     return

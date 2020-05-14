@@ -1,6 +1,53 @@
 import random
+import copy
+import time
 import cv2
 import numpy as np
+import open3d as o3d
+
+class O3DViewer():
+    def __init__(self, obj_mesh):
+        #read mesh for open3d visualization
+        self.obj_mesh = o3d.io.read_triangle_mesh(obj_mesh)
+        #visualize estimated pose
+        self.mesh_1 = copy.deepcopy(self.obj_mesh)
+        self.mesh_1.paint_uniform_color([0.9, 0.1, 0.1])
+        self.mesh_1.transform(np.eye(4))
+        #visualize ground truth pose
+        self.mesh_2 = copy.deepcopy(self.obj_mesh)
+        self.mesh_2.paint_uniform_color([0.1, 0.9, 0.1])
+        self.mesh_2.transform(np.eye(4))
+        self.o3d_vis = o3d.visualization.Visualizer()
+        self.o3d_vis.create_window(
+            window_name="hoge",
+            width=1200,
+            height=800)
+        #add geometries to visualizer
+        self.frame = o3d.geometry.TriangleMesh.create_coordinate_frame(0.2)
+        self.o3d_vis.add_geometry(self.mesh_1)
+        self.o3d_vis.add_geometry(self.mesh_2)
+        self.o3d_vis.add_geometry(self.frame)
+
+    def run(self, mesh_1_pose, mesh_2_pose):
+        """
+        Main update loop.
+        Applies pose transformations to geometry objects,
+        updates the rendered and then inverses the applied
+        transformations.
+        """
+        self.mesh_1.transform(mesh_1_pose)
+        self.mesh_2.transform(mesh_2_pose)
+        self.frame.transform(mesh_2_pose)
+
+        self.o3d_vis.update_geometry(self.mesh_1)
+        self.o3d_vis.update_geometry(self.mesh_2)
+        self.o3d_vis.poll_events()
+        self.o3d_vis.update_renderer()
+
+        self.mesh_1.transform(np.linalg.inv(mesh_1_pose))
+        self.mesh_2.transform(np.linalg.inv(mesh_2_pose))
+        self.frame.transform(np.linalg.inv(mesh_2_pose))
+        return
 
 class VisualizePreds():
     def __init__(self, mesh_filename, camera_mat):
@@ -11,6 +58,8 @@ class VisualizePreds():
         #list of images to display
         self.org_canvas = []
         self.out_images = []
+        #initialize open3d viewer
+        self.o3d_viewer = O3DViewer(mesh_filename)
 
     def read_off(self, filename):
         """
@@ -99,4 +148,12 @@ class VisualizePreds():
         cv2.destroyAllWindows()
         self.org_canvas = []
         self.out_images = []
+        return
+
+    def visualize_3d(self, inp_pose, ref_pose):
+        """
+        Updates open3d viewer with input poses.
+        """
+        self.o3d_viewer.run(inp_pose, ref_pose)
+        time.sleep(0.5)
         return
