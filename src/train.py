@@ -17,7 +17,7 @@ from torch import autograd
 from torch.utils.data import DataLoader
 
 from dataloader import ObjectKeypointDataset
-from models.StackedHourGlass import *
+from models.StackedHourGlass import StackedHourGlass
 
 
 def train(net, train_data, criterion, optimizer, epoch):

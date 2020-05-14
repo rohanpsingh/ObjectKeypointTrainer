@@ -1,9 +1,5 @@
-import cv2
-import torch
 import numpy as np
-import torch
-from math import *
-from utils.preprocess import *
+from utils.preprocess import to_torch, to_numpy
 
 def Gaussian(sigma):
     return np.array([0.0529,  0.1197,  0.1954,  0.2301,  0.1954,  0.1197,  0.0529,

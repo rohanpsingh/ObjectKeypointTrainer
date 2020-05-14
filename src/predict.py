@@ -14,7 +14,7 @@ import os
 from utils.evaluate_preds import EvaluatePreds
 from utils.visualize_preds import VisualizePreds
 from dataloader import ObjectKeypointDataset
-from models.StackedHourGlass import *
+from models.StackedHourGlass import StackedHourGlass
 
 np.set_printoptions(suppress=True)
 net_inp_res = 256
@@ -80,6 +80,7 @@ def get_predictions(args):
             est_keypoints = evaluator.getKeypointsFromHeatmaps(out[1].cpu().numpy(), meta['centers'], meta['scales'])
             #tru_keypoints = evaluator.getKeypointsFromHeatmaps(targets.numpy(), meta['centers'], meta['scales'])
             tru_keypoints = [{idx:tuple(i.tolist()) for idx,i in enumerate(batch)} for batch in meta['points']]
+            #tru_with_noise = [{idx:tuple((i*(1 + (np.random.rand()-0.5)*0.02)).tolist()) for idx,i in enumerate(batch)} for batch in meta['points']]
 
             out_poses = evaluator.getTransformationsUsingPnP(est_keypoints)
             tru_poses = evaluator.getTransformationsUsingPnP(tru_keypoints)
