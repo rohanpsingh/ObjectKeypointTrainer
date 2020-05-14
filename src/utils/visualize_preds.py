@@ -74,7 +74,7 @@ class VisualizePreds(object):
             for face in random.sample(face_pts, int(0.1*(len(face_pts)))):
                 cv2.fillPoly(canvas, [np.asarray(face)], (0,255,255))
             #add some vertices
-            for pt in random.sample(imgpoints, int(0.1*(len(imgpoints)))):
+            for pt in random.sample(list(imgpoints), int(0.1*(len(imgpoints)))):
                 cv2.circle(canvas, tuple((int(pt[0,0]), int(pt[0,1]))), 1, color, -1)
             self.out_images.append(canvas)
         return

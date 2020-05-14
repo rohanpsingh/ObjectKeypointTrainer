@@ -3,7 +3,7 @@ import torch
 import numpy as np
 import torch
 from math import *
-from preprocess import *
+from utils.preprocess import *
 
 def Gaussian(sigma):
     return np.array([0.0529,  0.1197,  0.1954,  0.2301,  0.1954,  0.1197,  0.0529,
@@ -27,10 +27,10 @@ def DrawGaussian(img, pt, sigma, truesigma=-1):
     g = Gaussian(size)
     if truesigma==0.5:
         g[0,:] *= 0
-    	g[-1,:] *= 0
-    	g[:,0] *= 0
-    	g[:,-1] *= 0
-    	g *= 1.5
+        g[-1,:] *= 0
+        g[:,0] *= 0
+        g[:,-1] *= 0
+        g *= 1.5
     g_x = [max(0, -ul[0]), min(br[0], img.shape[1]) - max(0, ul[0]) + max(0, -ul[0])]
     g_y = [max(0, -ul[1]), min(br[1], img.shape[0]) - max(0, ul[1]) + max(0, -ul[1])]
 

@@ -61,7 +61,7 @@ class EvaluatePreds(object):
             pts_3d = np.ascontiguousarray(np.asarray(pts_3d)).reshape((len(pts_3d),1,3))
             tf = np.eye(4)
             try:
-                #_, rvec, tvec, inl = cv2.solvePnPRansac(pts_3d, pts_2d, self.camera_mat, None, None, None, False, 1000, 1, 0.95, None, cv2.SOLVEPNP_EPNP)
+                #_, rvec, tvec, inl = cv2.solvePnPRansac(pts_3d, pts_2d, self.camera_mat, None, None, None, False, 100, 5, flags=cv2.SOLVEPNP_EPNP)
                 _, rvec, tvec = cv2.solvePnP(pts_3d, pts_2d, self.camera_mat, None, None, None, False, cv2.SOLVEPNP_EPNP)
                 T[idx, :3,:3] = cv2.Rodrigues(rvec)[0]
                 T[idx, :3, 3] = tvec[:,0]
@@ -155,19 +155,19 @@ class EvaluatePreds(object):
         ax5.set_ylabel('rot_error_z')
         ax5.grid(True)
 
-        ax6.plot(zip(np.asarray(self.list_tru_rot)[:, 0], np.asarray(self.list_est_rot)[:, 0]))
+        ax6.plot(list(zip(np.asarray(self.list_tru_rot)[:, 0], np.asarray(self.list_est_rot)[:, 0])))
         ax6.set_ylabel('rot_track_x')
         ax6.grid(True)
 
-        ax7.plot(zip(np.asarray(self.list_tru_rot)[:, 1], np.asarray(self.list_est_rot)[:, 1]))
+        ax7.plot(list(zip(np.asarray(self.list_tru_rot)[:, 1], np.asarray(self.list_est_rot)[:, 1])))
         ax7.set_ylabel('rot_track_y')
         ax7.grid(True)
 
-        ax8.plot(zip(np.asarray(self.list_tru_rot)[:, 2], np.asarray(self.list_est_rot)[:, 2]))
+        ax8.plot(list(zip(np.asarray(self.list_tru_rot)[:, 2], np.asarray(self.list_est_rot)[:, 2])))
         ax8.set_ylabel('rot_track_z')
         ax8.grid(True)
 
-        ax9.plot(zip(np.asarray(self.list_kpt_error)))
+        ax9.plot(np.asarray(self.list_kpt_error))
         ax9.set_ylabel('kpt_pix_error')
         ax9.grid(True)
 

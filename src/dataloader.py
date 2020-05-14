@@ -76,7 +76,7 @@ class ObjectKeypointDataset(torch.utils.data.Dataset):
         suffix = re.split("_",title)[1]
 
         #read rgb image
-        rgb_image = im_to_torch(plt.imread(image_file))
+        rgb_image = im_to_torch(plt.imread(image_file).copy())
 
         #read keypoints, center and scale
         keypts_filename = os.path.join(self.data_dir, "label", "label_" + suffix + ".txt")
