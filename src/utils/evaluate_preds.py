@@ -57,7 +57,7 @@ class EvaluatePreds():
         Input: List of dictionaries
         Output: 4x4 homogenous matrix
         """
-        out_poses = np.zeros((len(imagepoints), 4, 4))
+        out_poses = np.eye(4)[np.newaxis, :].repeat(len(imagepoints), axis=0)
         for idx, imagedict in enumerate(imagepoints):
             pts_2d = [val for i,val in imagedict.items() if any(val)]
             pts_3d = [self.model_points[i] for i,val in imagedict.items() if any(val)]
