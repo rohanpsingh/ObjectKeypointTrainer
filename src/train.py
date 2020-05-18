@@ -47,11 +47,11 @@ def main():
 
     ap = argparse.ArgumentParser()
     ap.add_argument("-o", "--outdir", required=False, default=False)
-    ap.add_argument("-e", "--epochs", required=False, default=1000, type=int)
+    ap.add_argument("-e", "--epochs", required=False, default=100, type=int)
     ap.add_argument("-d", "--dataset", required=True)
     ap.add_argument("-c", "--checkpoint", required=False, default=5, type=int)
+    ap.add_argument("--num_keypts", required=True, type=int)
     ap.add_argument("--batch_size", required=False, default=8, type=int)
-    ap.add_argument("--num_keypts", required=False, default=9, type=int)
     ap.add_argument("--rate", required=False, default=2.5e-4, type=float)
     args = ap.parse_args()
 
