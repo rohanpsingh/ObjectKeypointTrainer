@@ -94,8 +94,6 @@ def main():
         print("Writing to ", args.outdir)
         if os.path.isdir(args.outdir):
             shutil.rmtree(args.outdir)
-        os.makedirs(os.path.join(args.outdir,'valids'))
-        os.makedirs(os.path.join(args.outdir,'trains'))
         log = "args.batch_size: " + repr(args.batch_size) + " args.batch_size: " + repr(args.batch_size) + "\n" + \
               "train data size is: " + repr(len(train_data)) + " batches of batch size: " + repr(args.batch_size) + "\n" + \
               "valid data size is: " + repr(len(valid_data)) + " batches of batch size: " + repr(args.batch_size) + "\n" + \
