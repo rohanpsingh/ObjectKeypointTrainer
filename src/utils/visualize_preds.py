@@ -155,5 +155,5 @@ class VisualizePreds():
         Updates open3d viewer with input poses.
         """
         self.o3d_viewer.run(inp_pose, ref_pose)
-        time.sleep(0.5)
+        time.sleep(3)
         return

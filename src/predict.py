@@ -50,7 +50,8 @@ def get_predictions(args):
 
     #set up evaluator and visualizer
     evaluator = EvaluatePreds(model_points, camera_mat, args.verbose)
-    vis = VisualizePreds(args.obj_off, camera_mat)
+    if args.visualize:
+        vis = VisualizePreds(args.obj_off, camera_mat)
 
     #load dataset using dataloader
     eval_set = ObjectKeypointDataset(os.path.join(args.dataset, "valid.txt"), num_feats, NET_INP_RES, NET_OUT_RES, is_train=False)
@@ -84,7 +85,7 @@ def get_predictions(args):
                 vis.draw_keypoints(est_keypoints, tru_keypoints)
                 vis.draw_model(out_poses)
                 vis.draw_model(tru_poses, color=(0, 255, 0))
-                vis.cv_display(0, "batch: " + repr(batch_id))
+                vis.cv_display(500, "batch: " + repr(batch_id))
                 #vis.visualize_3d(out_poses[0], tru_poses[0])
     #plot errors
     evaluator.plot()
