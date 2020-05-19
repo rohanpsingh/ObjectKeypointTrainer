@@ -102,8 +102,9 @@ This will, by default, display a cv window which shows the predicted keypoints i
 
 Sometimes, instead of a 2D projection, user may require visualizing the estimated 6-DoF pose and the pose estimated from ground-truth keypoint annotations in a 3D environment for better debugging. For this, we use [open3d](http://www.open3d.org/docs/release/getting_started.html) to provide a rather basic visualization feature. To enable this, un-comment the following line in predict.py: ```#vis.visualize_3d(out_poses[0], tru_poses[0])```
 
-open3d visualization will look somewhat as follows (TODO: fix camera viewpoint). Here the green object is the true pose and the red is the predicted one.
-![image](https://user-images.githubusercontent.com/16384313/82295952-735c1400-99eb-11ea-8141-7c0dadf65196.png)
+The open3d visualization will look somewhat as follows (TODO: fix camera viewpoint). Here the green object is the true pose and the red is the predicted one.
+![open3d_window](https://user-images.githubusercontent.com/16384313/82295952-735c1400-99eb-11ea-8141-7c0dadf65196.png)
+
 ### Example .pp file
 Picking points in MeshLab using the PickPoints tool produces a *.pp file like below, which is then parsed to obtain the 3D object points.
 ```
