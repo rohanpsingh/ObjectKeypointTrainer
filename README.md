@@ -8,8 +8,8 @@ We provide scripts for training the network, evaluating its predictions with res
 The code in this repository forms Part-2 of the full software:
 ![pose-estimation-github](https://user-images.githubusercontent.com/16384313/82294936-dd73b980-99e9-11ea-9ec3-e0ce5dd52aa5.jpg)
 Links to other parts:
--- Part-1: [RapidPoseLabels](https://github.com/rohanpsingh/rapidposelabels)
--- Part-3: Not-yet-available
+- Part-1: [RapidPoseLabels](https://github.com/rohanpsingh/rapidposelabels) 
+- Part-3: Not-yet-available
 
 ## Dependencies
 
@@ -77,6 +77,8 @@ To run the training script with default options, use:
 $ cd /path-to-base-dir/src/
 $ python train.py --dataset ../data/wrench --num_keypts 7
 ```
+Setting ```--num_keypts 7``` will make the code to expect ```u,v``` coordinates of 7 keypoints in each of ```label_*.txt```. Hence, please ensure the consistency in the number of keypoints. 
+
 Optional command lines to training script can be obtained:
 ```
 $ python train.py --help
@@ -106,7 +108,7 @@ The open3d visualization will look somewhat as follows (TODO: fix camera viewpoi
 ![open3d_window](https://user-images.githubusercontent.com/16384313/82295952-735c1400-99eb-11ea-8141-7c0dadf65196.png)
 
 ### Example .pp file
-Picking points in MeshLab using the PickPoints tool produces a *.pp file like below, which is then parsed to obtain the 3D object points.
+Picking points in MeshLab using the PickPoints tool produces a *.pp file like below, which is then parsed to obtain the 3D object points. Again, please ensure the sequence and number of keypoints is consistent.
 ```
 <!DOCTYPE PickedPoints>
 <PickedPoints>
