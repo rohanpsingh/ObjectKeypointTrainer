@@ -13,15 +13,13 @@ from models.StackedHourGlass import StackedHourGlass
 
 def train(net, train_data, criterion, optimizer):
     net.train()
-    heatmaploss = criterion
     losses = []
 
     for inputs, targets, _ in train_data:
         inputs  = torch.autograd.Variable(inputs.cuda())
         targets = torch.autograd.Variable(targets.cuda())
         out = net(inputs)
-        hm_loss = heatmaploss(out[1], targets)
-        loss = hm_loss
+        loss = criterion(out[1], targets)
 
         losses.append(loss.data)
         optimizer.zero_grad()
@@ -31,14 +29,13 @@ def train(net, train_data, criterion, optimizer):
 
 def valid(net, valid_data, criterion):
     net.eval()
-    heatmaploss = criterion
     error = []
     with torch.no_grad():
         for inputs, targets, _ in valid_data:
             inputs = torch.autograd.Variable(inputs.cuda())
             targets = torch.autograd.Variable(targets.cuda())
             out = net(inputs)
-            error.append(heatmaploss(out[1], targets).data)
+            error.append(criterion(out[1], targets).data)
     return sum(error)/len(error)
 
 
