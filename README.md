@@ -6,7 +6,8 @@ This is a PyTorch code for the training and evaluation of a stacked-hourglass ne
 We provide scripts for training the network, evaluating its predictions with respect to a given ground-truth and visualizing the predictions in several ways. Visualizing the predictions in 2D and 3D are frequently needed for gaining a better understanding of the network performance and for debugging potential bugs in the dataset or training procedure.
 
 The code in this repository forms Part-2 of the full software:
-![pose-estimation-github](https://user-images.githubusercontent.com/16384313/82294936-dd73b980-99e9-11ea-9ec3-e0ce5dd52aa5.jpg)
+![pose-estimation-github](https://user-images.githubusercontent.com/16384313/84745705-ec04bf00-afef-11ea-9966-c88f24c9a3ba.png)
+
 Links to other parts:
 - Part-1: [RapidPoseLabels](https://github.com/rohanpsingh/rapidposelabels) 
 - Part-3: Not-yet-available
@@ -105,7 +106,9 @@ This will, by default, display a cv window which shows the predicted keypoints i
 Sometimes, instead of a 2D projection, user may require visualizing the estimated 6-DoF pose and the pose estimated from ground-truth keypoint annotations in a 3D environment for better debugging. For this, we use [open3d](http://www.open3d.org/docs/release/getting_started.html) to provide a rather basic visualization feature. To enable this, un-comment the following line in predict.py: ```#vis.visualize_3d(out_poses[0], tru_poses[0])```
 
 The open3d visualization will look somewhat as follows (TODO: fix camera viewpoint). Here the green object is the true pose and the red is the predicted one.
-![open3d_window](https://user-images.githubusercontent.com/16384313/82295952-735c1400-99eb-11ea-8141-7c0dadf65196.png)
+<p align="center">
+<img src="https://user-images.githubusercontent.com/16384313/82295952-735c1400-99eb-11ea-8141-7c0dadf65196.png" alt="open3d_window" width="80%">
+<p>
 
 ### Example .pp file
 Picking points in MeshLab using the PickPoints tool produces a *.pp file like below, which is then parsed to obtain the 3D object points. Again, please ensure the sequence and number of keypoints is consistent.
