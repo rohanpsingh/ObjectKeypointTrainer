@@ -1,4 +1,6 @@
-
+Code for the paper:  
+[**Instance-specific 6-dof object pose estimation from minimal annotations**](https://arxiv.org/pdf/2207.13264.pdf) (SII 2020)  
+[Rohan P. Singh](https://rohanpsingh.github.io), [Iori Kumagai](https://unit.aist.go.jp/jrl-22022/en/members/member-kumagai.html), [Mehdi Benallegue](https://unit.aist.go.jp/jrl-22022/en/members/member-benalleguem.html), [Antonio Gabas](https://github.com/gntoni), [Yusuke Yoshiyasu](https://unit.aist.go.jp/jrl-22022/en/members/member-yoshiyasu.html), [Fumio Kanehiro](https://unit.aist.go.jp/jrl-22022/en/members/member-kanehiro.html)
 
 # Stacked-Hourglass networks for Object Keypoints
 
@@ -146,3 +148,16 @@ The general idea of object pose estimation using semantic keypoints is mainly ba
 - [https://github.com/princeton-vl/pose-hg-demo](https://github.com/princeton-vl/pose-hg-demo)  
 - [https://github.com/bearpaw/pytorch-pose](https://github.com/bearpaw/pytorch-pose)
 - [https://github.com/princeton-vl/pytorch_stacked_hourglass](https://github.com/princeton-vl/pytorch_stacked_hourglass)
+
+## Citation
+If you find this work useful in your own research:
+```
+@inproceedings{singh2020instance,
+  title={Instance-specific 6-dof object pose estimation from minimal annotations},
+  author={Singh, Rohan P and Kumagai, Iori and Gabas, Antonio and Benallegue, Mehdi and Yoshiyasu, Yusuke and Kanehiro, Fumio},
+  booktitle={2020 IEEE/SICE International Symposium on System Integration (SII)},
+  pages={109--114},
+  year={2020},
+  organization={IEEE}
+}
+```
